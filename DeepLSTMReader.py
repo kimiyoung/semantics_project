@@ -1,81 +1,67 @@
 import numpy as np
 import theano
 import theano.tensor as T
+import lasagne.layers as L
 import lasagne
-import time
 
 from config import *
 from MiniBatchLoader import MiniBatchLoader
+
+def build_lstm_reader(vocab_size, input_var=T.itensor3(), mask_var=T.tensor3()):
+    # the input layer
+    l_in = L.InputLayer(shape=(BATCH_SIZE, MAX_DOC_LEN + MAX_QRY_LEN, 1), input_var=input_var)
+    # the mask layer
+    l_mask = L.InputLayer(shape=(BATCH_SIZE, MAX_DOC_LEN + MAX_QRY_LEN), input_var=mask_var)
+    # the lookup table for word embeddings
+    l_embed = L.EmbeddingLayer(l_in, input_size=vocab_size, output_size=EMBED_DIM)
+    # the 1st lstm layer
+    l_fwd_1 = L.LSTMLayer(l_embed, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_mask, gradient_steps=GRAD_STEPS)
+    # the 2nd lstm layer
+    # NOTE: we probably need a vertical dropout layer in between
+    # NOTE: not sure if mask should be explicitly applied to the 2nd layer
+    l_fwd_2 = L.LSTMLayer(l_fwd_1, NUM_HIDDEN, grad_clipping=GRAD_CLIP, gradient_steps=GRAD_STEPS)
+    # slice final states of both lstm layers
+    l_fwd_1_slice = L.SliceLayer(l_fwd_1, -1, 1)
+    l_fwd_2_slice = L.SliceLayer(l_fwd_2, -1, 1)
+    # g will be used to score the words based on their embeddings
+    g = L.DenseLayer(L.concat([l_fwd_1_slice, l_fwd_2_slice], axis=1), num_units=EMBED_DIM)
+    # W is shared with the embedding layer
+    l_out = L.DenseLayer(g, num_units=vocab_size, W = l_embed.W.T, nonlinearity=lasagne.nonlinearities.softmax)
+    return l_out
 
 if __name__ == '__main__':
 
     train_batch_loader = MiniBatchLoader("cnn/questions/training", "vocab.txt")
     val_batch_loader = MiniBatchLoader("cnn/questions/validation", "vocab.txt")
-    vocab_size = len(train_batch_loader.dictionary)
+    vocab_size = train_batch_loader.vocab_size
 
     print("building network ...")
-    input_values = T.itensor3()
-    l_in = lasagne.layers.InputLayer(shape=(None, None, 1), input_var=input_values)
-
-    l_in_embedded = lasagne.layers.EmbeddingLayer(l_in, input_size=vocab_size, output_size=EMBED_DIM)
-
-    l_mask = lasagne.layers.InputLayer(shape=(BATCH_SIZE, MAX_DOC_LEN + MAX_QRY_LEN))
-
-    l_forward_1 = lasagne.layers.LSTMLayer(
-        l_in_embedded, NUM_HIDDEN, grad_clipping=GRAD_CLIP,
-        mask_input=l_mask,
-        nonlinearity=lasagne.nonlinearities.tanh,
-        gradient_steps=GRAD_STEPS)
-
-    # XXX: might need a vertical dropout layer in between
-    l_forward_2 = lasagne.layers.LSTMLayer(
-        l_forward_1, NUM_HIDDEN, grad_clipping=GRAD_CLIP,
-        nonlinearity=lasagne.nonlinearities.tanh,
-        gradient_steps=GRAD_STEPS)
-
-    # last slices of the two layers
-    l_forward_slice_1 = lasagne.layers.SliceLayer(l_forward_1, -1, 1)
-    l_forward_slice_2 = lasagne.layers.SliceLayer(l_forward_2, -1, 1)
-
-    l_forward_slice = lasagne.layers.concat([l_forward_slice_1, l_forward_slice_2], axis=1)
-
-    g = lasagne.layers.DenseLayer(l_forward_slice, num_units=EMBED_DIM)
-
-    # use g to score the words based on their embeddings
-    l_out = lasagne.layers.DenseLayer(g, num_units=vocab_size, W = l_in_embedded.W.T,
-            nonlinearity=lasagne.nonlinearities.softmax)
-
-    target_values = T.ivector('target_output')
-    network_output = lasagne.layers.get_output(l_out)
-    loss_func = T.nnet.categorical_crossentropy(network_output, target_values).mean()
-    all_params = lasagne.layers.get_all_params(l_out, trainable=True)
+    input_var, target_var, mask_var = T.itensor3('input'), T.ivector('target'), T.matrix('mask')
+    network = build_lstm_reader(vocab_size, input_var, mask_var)
 
     print("computing updates ...")
-    updates = lasagne.updates.adagrad(loss_func, all_params, learning_rate=LEARNING_RATE)
+    prediction = L.get_output(network)
+    loss = T.nnet.categorical_crossentropy(prediction, target_var).mean()
+    params = L.get_all_params(network, trainable=True)
+    updates = lasagne.updates.adagrad(loss, params, learning_rate=LEARNING_RATE)
 
     print("compiling functions ...")
-    train = theano.function([l_in.input_var, target_values, l_mask.input_var], loss_func, updates=updates, allow_input_downcast=True)
-    compute_loss = theano.function([l_in.input_var, target_values, l_mask.input_var], loss_func, allow_input_downcast=True)
+    acc = lasagne.objectives.categorical_accuracy(prediction, target_var).mean()
+    train_fn = theano.function([input_var, target_var, mask_var], [loss, acc], updates=updates)
+    val_fn = theano.function([input_var, target_var, mask_var], [loss, acc])
 
-    accuracy_func = lasagne.objectives.categorical_accuracy(network_output, target_values).mean()
-    compute_accuracy = theano.function([l_in.input_var, target_values, l_mask.input_var], accuracy_func, allow_input_downcast=True)
-
-    # use a small batch for validation
+    print("training ...")
+    # pick a small batch for validation
     d_val, q_val, a_val, m_val = val_batch_loader.next()
     x_val = np.concatenate([d_val, q_val], axis=1)
 
-    print("training ...")
     for _ in xrange(NUM_EPOCHS):
-
         # d, q, a, m: document, query, answer, mask
         d_train, q_train, a_train, m_train = train_batch_loader.next()
         x_train = np.concatenate([d_train, q_train], axis=1)
         
-        loss_train = train(x_train, a_train, m_train)
-        loss_val = compute_loss(x_val, a_val, m_val)
-
-        acc_train = compute_accuracy(x_train, a_train, m_train)
-        acc_val = compute_accuracy(x_val, a_val, m_val)
+        loss_train, acc_train = train_fn(x_train, a_train, m_train)
+        loss_val, acc_val = val_fn(x_val, a_val, m_val)
 
         print "TRAIN loss=%.4e acc=%.4f VAL loss=%.4e acc=%.4f" % (
                 loss_train, acc_train, loss_val, acc_val)

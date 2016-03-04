@@ -18,7 +18,7 @@ class MiniBatchLoader():
         """load vocabulary dictionary from external file"""
         pairs = map(lambda line:line.split(), open(fname))
         self.dictionary = { p[0]:int(p[1]) for p in pairs }
-        # self.vocab_size = len(self.dictionary)
+        self.vocab_size = len(self.dictionary)
 
     def parse_file(self, fname):
         """load document, query and answer from a *.question file"""

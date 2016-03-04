@@ -23,7 +23,10 @@ python gen_vocab.py
 
 ## Todo
 
-0. optimize the speed and memory efficiency
-1. improve/complete `DeepLSTMReader.py`.
-2. improve the batch loader to handle non-uniform document/query length
+0. check whether is model architecture is correct
+(the current model doesn't seem to converge to a meaningful local minimum,
+suggesting there might be bugs)
+1. optimize speed and memory efficiency
+2. implement some other baselines (e.g. SVM)
+3. improve the batch loader to handle non-uniform document/query length
 
