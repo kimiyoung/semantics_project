@@ -26,5 +26,4 @@ python gen_vocab.py
 0. optimize the speed and memory efficiency
 1. improve/complete `DeepLSTMReader.py`.
 2. improve the batch loader to handle non-uniform document/query length
-...
 
