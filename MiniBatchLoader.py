@@ -54,22 +54,21 @@ class MiniBatchLoader():
 
         for n in range(BATCH_SIZE):
             f = self.file_pool[self.ptr]
+
             doc_idx, qry_idx, ans_idx = self.parse_file(f)
-            self.ptr = (self.ptr+1) % self.N
 
             d[n,:len(doc_idx),0] = np.array(doc_idx)
             q[n,:len(qry_idx),0] = np.array(qry_idx)
-
             a[n] = ans_idx
-
             mask[n,:(len(doc_idx)+len(qry_idx))] = 1
+
+            self.ptr = (self.ptr+1) % self.N
 
         return d, q, a, mask
 
 if __name__ == '__main__':
 
     mini_batch_loader = MiniBatchLoader("cnn/questions/validation", "vocab.txt")
-
     d, q, a, m = mini_batch_loader.next()
     print "memory consumption: %f GB" % ((d.nbytes+q.nbytes+a.nbytes)/1e9)
 

@@ -7,8 +7,6 @@ import time
 from config import *
 from MiniBatchLoader import MiniBatchLoader
 
-EMBED_DIM=128
-
 if __name__ == '__main__':
 
     train_batch_loader = MiniBatchLoader("cnn/questions/training", "vocab.txt")
@@ -35,21 +33,32 @@ if __name__ == '__main__':
         nonlinearity=lasagne.nonlinearities.tanh,
         gradient_steps=GRAD_STEPS)
 
-    l_forward_slice = lasagne.layers.SliceLayer(l_forward_2, -1, 1)
-    l_out = lasagne.layers.DenseLayer(l_forward_slice, num_units=vocab_size,
-            W=lasagne.init.Normal(), nonlinearity=lasagne.nonlinearities.softmax)
+    # last slices of the two layers
+    l_forward_slice_1 = lasagne.layers.SliceLayer(l_forward_1, -1, 1)
+    l_forward_slice_2 = lasagne.layers.SliceLayer(l_forward_2, -1, 1)
+
+    l_forward_slice = lasagne.layers.concat([l_forward_slice_1, l_forward_slice_2], axis=1)
+
+    g = lasagne.layers.DenseLayer(l_forward_slice, num_units=EMBED_DIM)
+
+    # use g to score the words based on their embeddings
+    l_out = lasagne.layers.DenseLayer(g, num_units=vocab_size, W = l_in_embedded.W.T,
+            nonlinearity=lasagne.nonlinearities.softmax)
 
     target_values = T.ivector('target_output')
     network_output = lasagne.layers.get_output(l_out)
-    cost = T.nnet.categorical_crossentropy(network_output, target_values).mean()
+    loss_func = T.nnet.categorical_crossentropy(network_output, target_values).mean()
     all_params = lasagne.layers.get_all_params(l_out, trainable=True)
 
     print("computing updates ...")
-    updates = lasagne.updates.adagrad(cost, all_params, LEARNING_RATE)
+    updates = lasagne.updates.adagrad(loss_func, all_params, learning_rate=LEARNING_RATE)
 
     print("compiling functions ...")
-    train = theano.function([l_in.input_var, target_values, l_mask.input_var], cost, updates=updates, allow_input_downcast=True)
-    compute_cost = theano.function([l_in.input_var, target_values, l_mask.input_var], cost, allow_input_downcast=True)
+    train = theano.function([l_in.input_var, target_values, l_mask.input_var], loss_func, updates=updates, allow_input_downcast=True)
+    compute_loss = theano.function([l_in.input_var, target_values, l_mask.input_var], loss_func, allow_input_downcast=True)
+
+    accuracy_func = lasagne.objectives.categorical_accuracy(network_output, target_values).mean()
+    compute_accuracy = theano.function([l_in.input_var, target_values, l_mask.input_var], accuracy_func, allow_input_downcast=True)
 
     # use a small batch for validation
     d_val, q_val, a_val, m_val = val_batch_loader.next()
@@ -62,8 +71,12 @@ if __name__ == '__main__':
         d_train, q_train, a_train, m_train = train_batch_loader.next()
         x_train = np.concatenate([d_train, q_train], axis=1)
         
-        cost_train = train(x_train, a_train, m_train)
-        cost_val = compute_cost(x_val, a_val, m_val)
+        loss_train = train(x_train, a_train, m_train)
+        loss_val = compute_loss(x_val, a_val, m_val)
 
-        print "train_cost=%.5e val_cost=%.5e" % (cost_train, cost_val)
+        acc_train = compute_accuracy(x_train, a_train, m_train)
+        acc_val = compute_accuracy(x_val, a_val, m_val)
+
+        print "TRAIN loss=%.4e acc=%.4f VAL loss=%.4e acc=%.4f" % (
+                loss_train, acc_train, loss_val, acc_val)
 
