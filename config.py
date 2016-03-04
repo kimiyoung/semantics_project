@@ -15,7 +15,7 @@ GRAD_STEPS = -1
 # Special symbols indicating the starting/ending points of a query
 SYMB_BEGIN, SYMB_END = "@begin", "@end"
 # Number of epochs for training
-NUM_EPOCHS = 10000
+NUM_EPOCHS = 20
 # Dimension of word embedding
 EMBED_DIM = 128
 # Dropout rate

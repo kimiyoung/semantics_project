@@ -3,6 +3,7 @@ import theano
 import theano.tensor as T
 import lasagne.layers as L
 import lasagne
+import time
 
 from config import *
 from MiniBatchLoader import MiniBatchLoader
@@ -55,14 +56,18 @@ if __name__ == '__main__':
     d_val, q_val, a_val, m_val = val_batch_loader.next()
     x_val = np.concatenate([d_val, q_val], axis=1)
 
-    for _ in xrange(NUM_EPOCHS):
-        # d, q, a, m: document, query, answer, mask
-        d_train, q_train, a_train, m_train = train_batch_loader.next()
-        x_train = np.concatenate([d_train, q_train], axis=1)
-        
-        loss_train, acc_train = train_fn(x_train, a_train, m_train)
-        loss_val, acc_val = val_fn(x_val, a_val, m_val)
+    for epoch in xrange(NUM_EPOCHS):
+        estart = time.time()
+        for d_train, q_train, a_train, m_train in train_batch_loader:
+            # d, q, a, m: document, query, answer, mask
+            x_train = np.concatenate([d_train, q_train], axis=1)
+            
+            loss_train, acc_train = train_fn(x_train, a_train, m_train)
 
-        print "TRAIN loss=%.4e acc=%.4f VAL loss=%.4e acc=%.4f" % (
-                loss_train, acc_train, loss_val, acc_val)
+            print "TRAIN loss=%.4e acc=%.4f Time Elapsed %.1f" % (
+                    loss_train, acc_train, time.time()-estart)
+
+        loss_val, acc_val = val_fn(x_val, a_val, m_val)
+        print "Epoch %d TRAIN loss=%.4e acc=%.4f VAL loss=%.4e acc=%.4f" % (
+                epoch, loss_train, acc_train, loss_val, acc_val)
 

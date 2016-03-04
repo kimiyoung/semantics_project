@@ -1,5 +1,6 @@
 import glob
 import numpy as np
+import random
 from config import MAX_DOC_LEN, MAX_QRY_LEN, BATCH_SIZE, SYMB_BEGIN, SYMB_END
 
 class MiniBatchLoader():
@@ -9,10 +10,16 @@ class MiniBatchLoader():
         self.file_pool = glob.glob(directory + '/*.question')
         self.N = len(self.file_pool)
         self.load_vocabulary(vocab_file)
+	self.reset()
 
     def __iter__(self):
         """make the object iterable"""
         return self
+
+    def reset(self):
+        """new iteration"""
+        self.ptr = 0
+        random.shuffle(self.file_pool)
 
     def load_vocabulary(self, fname):
         """load vocabulary dictionary from external file"""
@@ -46,6 +53,10 @@ class MiniBatchLoader():
 
     def next(self):
         """load the next batch"""
+	if self.ptr==self.N:
+            self.reset()
+            raise StopIteration()
+
         d = np.zeros((BATCH_SIZE, MAX_DOC_LEN, 1), dtype='int32')
         q = np.zeros((BATCH_SIZE, MAX_QRY_LEN, 1), dtype='int32')
         a = np.zeros((BATCH_SIZE, ), dtype='int32')
@@ -62,7 +73,7 @@ class MiniBatchLoader():
             a[n] = ans_idx
             mask[n,:(len(doc_idx)+len(qry_idx))] = 1
 
-            self.ptr = (self.ptr+1) % self.N
+            self.ptr = self.ptr+1
 
         return d, q, a, mask
 
