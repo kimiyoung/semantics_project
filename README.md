@@ -23,7 +23,7 @@ python gen_vocab.py
 
 ## Todo
 
-0. optimize the speed and memory efficiency (each minibatch is of size `BATCH_SIZE x (MAX_DOC_LEN + MAX_QRY_LEN) x VOCAB_SIZE`, which is pretty large).
+0. optimize the speed and memory efficiency
 1. improve/complete `DeepLSTMReader.py`.
 2. improve the batch loader to handle non-uniform document/query length
 ...

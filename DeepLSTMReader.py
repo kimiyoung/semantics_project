@@ -7,6 +7,8 @@ import time
 from config import *
 from MiniBatchLoader import MiniBatchLoader
 
+EMBED_DIM=128
+
 if __name__ == '__main__':
 
     train_batch_loader = MiniBatchLoader("cnn/questions/training", "vocab.txt")
@@ -14,12 +16,15 @@ if __name__ == '__main__':
     vocab_size = len(train_batch_loader.dictionary)
 
     print("building network ...")
-    l_in = lasagne.layers.InputLayer(shape=(None, None, vocab_size))
+    input_values = T.itensor3()
+    l_in = lasagne.layers.InputLayer(shape=(None, None, 1), input_var=input_values)
+
+    l_in_embedded = lasagne.layers.EmbeddingLayer(l_in, input_size=vocab_size, output_size=EMBED_DIM)
 
     l_mask = lasagne.layers.InputLayer(shape=(BATCH_SIZE, MAX_DOC_LEN + MAX_QRY_LEN))
 
     l_forward_1 = lasagne.layers.LSTMLayer(
-        l_in, NUM_HIDDEN, grad_clipping=GRAD_CLIP,
+        l_in_embedded, NUM_HIDDEN, grad_clipping=GRAD_CLIP,
         mask_input=l_mask,
         nonlinearity=lasagne.nonlinearities.tanh,
         gradient_steps=GRAD_STEPS)
@@ -39,7 +44,7 @@ if __name__ == '__main__':
     cost = T.nnet.categorical_crossentropy(network_output, target_values).mean()
     all_params = lasagne.layers.get_all_params(l_out, trainable=True)
 
-    print("Computing updates ...")
+    print("computing updates ...")
     updates = lasagne.updates.adagrad(cost, all_params, LEARNING_RATE)
 
     print("compiling functions ...")

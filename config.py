@@ -3,7 +3,7 @@ MAX_QRY_LEN = 64
 # Maximum document length
 MAX_DOC_LEN = 2048
 # Minibatch Size
-BATCH_SIZE = 4
+BATCH_SIZE = 32
 # Gradient clip threshold
 GRAD_CLIP = 100
 # Learning rate

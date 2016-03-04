@@ -18,7 +18,7 @@ class MiniBatchLoader():
         """load vocabulary dictionary from external file"""
         pairs = map(lambda line:line.split(), open(fname))
         self.dictionary = { p[0]:int(p[1]) for p in pairs }
-        self.vocab_size = len(self.dictionary)
+        # self.vocab_size = len(self.dictionary)
 
     def parse_file(self, fname):
         """load document, query and answer from a *.question file"""
@@ -46,8 +46,8 @@ class MiniBatchLoader():
 
     def next(self):
         """load the next batch"""
-        d = np.zeros((BATCH_SIZE, MAX_DOC_LEN, self.vocab_size), dtype='float32')
-        q = np.zeros((BATCH_SIZE, MAX_QRY_LEN, self.vocab_size), dtype='float32')
+        d = np.zeros((BATCH_SIZE, MAX_DOC_LEN, 1), dtype='int32')
+        q = np.zeros((BATCH_SIZE, MAX_QRY_LEN, 1), dtype='int32')
         a = np.zeros((BATCH_SIZE, ), dtype='int32')
 
         mask = np.zeros((BATCH_SIZE, MAX_DOC_LEN + MAX_QRY_LEN), dtype='float32')
@@ -57,10 +57,9 @@ class MiniBatchLoader():
             doc_idx, qry_idx, ans_idx = self.parse_file(f)
             self.ptr = (self.ptr+1) % self.N
 
-            for i, t in enumerate(doc_idx):
-                d[n,i,t] = 1
-            for j, t in enumerate(qry_idx):
-                q[n,j,t] = 1
+            d[n,:len(doc_idx),0] = np.array(doc_idx)
+            q[n,:len(qry_idx),0] = np.array(qry_idx)
+
             a[n] = ans_idx
 
             mask[n,:(len(doc_idx)+len(qry_idx))] = 1
@@ -71,6 +70,6 @@ if __name__ == '__main__':
 
     mini_batch_loader = MiniBatchLoader("cnn/questions/validation", "vocab.txt")
 
-    d, q, a = mini_batch_loader.next()
+    d, q, a, m = mini_batch_loader.next()
     print "memory consumption: %f GB" % ((d.nbytes+q.nbytes+a.nbytes)/1e9)
 
