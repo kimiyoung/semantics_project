@@ -13,20 +13,15 @@ def predict_answer(fname):
         0/1 indicators of the correctness of predictions made by dist/freq/freq_excl models
     """
 
-    # Load document, query and answer from file
-    fp = open(fname)
-    fp.readline()
-    fp.readline()
-    document = fp.readline().split() # document d
-    fp.readline()
-    query = fp.readline().split() # query q
-    fp.readline()
-    ans = fp.readline().strip()
-    fp.close()
+    # Load question content from file
+    content = open(fname).read().split('\n')
+    document = content[2].split() # document
+    query = content[4].split() # query
+    ans = content[6].strip() # answer
+    candidates = map(lambda x:x.split(':')[0], content[8:]) # entities
 
     # Get the set of candidate answers
-    entities = [w for w in document if w.startswith('@entity')]
-    candidates = set(entities)
+    entities = [w for w in document+query if w.startswith('@entity')]
 
     # word_offsets[w] is a list of w's locations in d
     word_offsets = {w: [] for w in document}
@@ -40,6 +35,9 @@ def predict_answer(fname):
     best_score = MAX_INT
     best_c = -1
     for c in candidates:
+        # there might be candidate that only appeared in q
+        if c not in word_offsets:
+            continue
         score = MAX_INT
         # Enumerate over all possible anchors to place @placeholder in d
         for x in word_offsets[c]:
@@ -86,7 +84,7 @@ if __name__ == '__main__':
         hits_freq_excl += indicator[2]
         n += 1
         # print out the accurarcy of the three methods
-        print "%5d dist=%.4f freq=%.4f freq_excl=%.4f" % (
+        print "%5d dist=%f freq=%f freq_excl=%f" % (
                 n, hits_dist/n, hits_freq/n, hits_freq_excl/n)
         
     print "elapse %f secs" % (time.time() - start)
