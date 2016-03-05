@@ -10,9 +10,9 @@ from MiniBatchLoader import MiniBatchLoader
 
 def build_lstm_reader(vocab_size, input_var=T.itensor3(), mask_var=T.tensor3()):
     # the input layer
-    l_in = L.InputLayer(shape=(BATCH_SIZE, MAX_DOC_LEN + MAX_QRY_LEN, 1), input_var=input_var)
+    l_in = L.InputLayer(shape=(None, None, 1), input_var=input_var)
     # the mask layer
-    l_mask = L.InputLayer(shape=(BATCH_SIZE, MAX_DOC_LEN + MAX_QRY_LEN), input_var=mask_var)
+    l_mask = L.InputLayer(shape=(None, None), input_var=mask_var)
     # the lookup table for word embeddings
     l_embed = L.EmbeddingLayer(l_in, input_size=vocab_size, output_size=EMBED_DIM)
     # the 1st lstm layer
@@ -32,7 +32,12 @@ def build_lstm_reader(vocab_size, input_var=T.itensor3(), mask_var=T.tensor3()):
 
 if __name__ == '__main__':
 
+    print("loading training files (may take around 2 min) ...")
+    # loading all files in the training set can be slow. I'll optimize it when I have time.
+    # alternatively, we may just store the train_batch_loader in dist via serialization.
     train_batch_loader = MiniBatchLoader("cnn/questions/training", "vocab.txt")
+
+    print("loading validation files ...")
     val_batch_loader = MiniBatchLoader("cnn/questions/validation", "vocab.txt")
     vocab_size = train_batch_loader.vocab_size
 
@@ -53,12 +58,12 @@ if __name__ == '__main__':
 
     print("training ...")
     # pick a small batch for validation
-    d_val, q_val, a_val, m_val = val_batch_loader.next()
+    d_val, q_val, a_val, m_val, _ = val_batch_loader.next()
     x_val = np.concatenate([d_val, q_val], axis=1)
 
     for epoch in xrange(NUM_EPOCHS):
         estart = time.time()
-        for d_train, q_train, a_train, m_train in train_batch_loader:
+        for d_train, q_train, a_train, m_train, _ in train_batch_loader:
             # d, q, a, m: document, query, answer, mask
             x_train = np.concatenate([d_train, q_train], axis=1)
             
