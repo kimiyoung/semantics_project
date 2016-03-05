@@ -53,10 +53,6 @@ class MiniBatchLoader():
 
     def next(self):
         """load the next batch"""
-	if self.ptr==self.N:
-            self.reset()
-            raise StopIteration()
-
         d = np.zeros((BATCH_SIZE, MAX_DOC_LEN, 1), dtype='int32')
         q = np.zeros((BATCH_SIZE, MAX_QRY_LEN, 1), dtype='int32')
         a = np.zeros((BATCH_SIZE, ), dtype='int32')
@@ -64,6 +60,10 @@ class MiniBatchLoader():
         mask = np.zeros((BATCH_SIZE, MAX_DOC_LEN + MAX_QRY_LEN), dtype='float32')
 
         for n in range(BATCH_SIZE):
+            if self.ptr==self.N:
+                self.reset()
+                raise StopIteration()
+
             f = self.file_pool[self.ptr]
 
             doc_idx, qry_idx, ans_idx = self.parse_file(f)
