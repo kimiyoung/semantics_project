@@ -30,6 +30,7 @@ class MiniBatchLoader():
         """load vocabulary dictionary from external file"""
         pairs = map(lambda line:line.split(), open(fname))
         self.dictionary = {p[0]:int(p[1]) for p in pairs}
+        self.inv_dictionary = {v: k for k, v in self.dictionary.items()}
         self.vocab_size = len(self.dictionary)
 
     def parse_all_files(self, directory):
@@ -56,7 +57,7 @@ class MiniBatchLoader():
     def parse_file(self, fname):
         """load document, query and answer from a *.question file"""
         # load raw tokens
-        content = open(fname).read().split('\n')
+        content = open(fname).readlines()
         doc_raw = content[2].split() # document
         qry_raw = content[4].split() # query
         ans_raw = content[6].strip() # answer
@@ -92,7 +93,8 @@ class MiniBatchLoader():
         d = np.zeros((curr_batch_size, self.curr_max_doc_len, 1), dtype='int32') # document
         q = np.zeros((curr_batch_size, self.max_qry_len, 1), dtype='int32') # query
         a = np.zeros((curr_batch_size, ), dtype='int32') # the correct answer
-        m = np.zeros((curr_batch_size, self.curr_max_doc_len + self.max_qry_len), dtype='float32') # mask
+        md = np.zeros((curr_batch_size, self.curr_max_doc_len), dtype='float32') # mask for d
+        mq = np.zeros((curr_batch_size, self.max_qry_len), dtype='float32') # mask for q
         e = [] # candidate answers (entities)
 
         for n in xrange(curr_batch_size):
@@ -101,16 +103,17 @@ class MiniBatchLoader():
             d[n,:len(doc_idx),0] = np.array(doc_idx)
             q[n,:len(qry_idx),0] = np.array(qry_idx)
             a[n] = ans_idx
-            m[n,:(len(doc_idx)+len(qry_idx))] = 1
-            e.append(ent_idx)
+            md[n,:len(doc_idx)] = 1
+            mq[n,:len(qry_idx)] = 1
+            e.append(np.array(ent_idx))
 
             self.ptr += 1
 
-        return d, q, a, m, e
+        return d, q, a, md, mq, e
 
 def unit_test():
-    """unit test for MiniBatchLoader using max-frequency (exclusive).
-    The accuracy should be around 0.37 and invariant over different batch sizes."""
+    """unit test to validate MiniBatchLoader using max-frequency (exclusive).
+    The accuracy should be around 0.37 and should be invariant over different batch sizes."""
     mini_batch_loader = MiniBatchLoader("cnn/questions/validation", "vocab.txt")
     hits, n = 0., 0
     for d, q, a, _, e in mini_batch_loader:

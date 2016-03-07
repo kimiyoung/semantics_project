@@ -14,7 +14,7 @@ def predict_answer(fname):
     """
 
     # Load question content from file
-    content = open(fname).read().split('\n')
+    content = open(fname).readlines()
     document = content[2].split() # document
     query = content[4].split() # query
     ans = content[6].strip() # answer

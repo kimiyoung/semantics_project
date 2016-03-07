@@ -1,11 +1,11 @@
 # Minibatch Size
 BATCH_SIZE = 32
 # Gradient clip threshold
-GRAD_CLIP = 5 
+GRAD_CLIP = 50
 # Learning rate
-LEARNING_RATE = 1e-2
+LEARNING_RATE = 5e-4
 # Number of RNN hidden units
-NUM_HIDDEN = 256
+NUM_HIDDEN = 128
 # Maximum number of steps in BPTT
 GRAD_STEPS = -1
 # Special symbols indicating the starting/ending points of a query
@@ -14,6 +14,5 @@ SYMB_BEGIN, SYMB_END = "@begin", "@end"
 NUM_EPOCHS = 20
 # Dimension of word embedding
 EMBED_DIM = 128
-# Dropout rate
-DROPOUT_RATE = 0.1
-
+# Whether allow skip connection from input to the 2nd layer
+SKIP_CONNECT = True
