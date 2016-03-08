@@ -28,5 +28,4 @@ python gen_vocab.py
 suggesting there might be bugs)
 1. optimize speed and memory efficiency
 2. implement some other baselines (e.g. SVM)
-3. improve the batch loader to handle non-uniform document/query length
 
