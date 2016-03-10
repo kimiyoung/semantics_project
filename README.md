@@ -8,24 +8,21 @@ Global configurations are in `config.py`.
 
 To run naive baselines including word-distance and max-frequency (inclusive/exclusive):
 ```
-python NaiveBaselines.py
+python model/NaiveBaselines.py
 ```
 
-To train a (very preliminary) two-layered unidirectional LSTM:
+To train a two-layered unidirectional LSTM reader,
+first unzip `word2vec_embed.tar.gz` to get word2vec embeddings for initializing the embedding layer.
+Then run:
 ```
-python DeepLSTMReader.py
+python train.py
 ```
 
-Generate the vocabulary list if `vocab.txt` does not exist:
-```
-python gen_vocab.py
-```
+`BidirectionalLSTMReader.py` and `UniformLSTMReader` in `model/` are under development.
 
 ## Todo
 
-0. check whether is model architecture is correct
-(the current model doesn't seem to converge to a meaningful local minimum,
-suggesting there might be bugs)
-1. optimize speed and memory efficiency
-2. implement some other baselines (e.g. SVM)
-
+0. add functionalities such as logging and model saving/loading
+1. optimize time/memory efficiency
+2. implement other baselines (attentive reader, memory nets, etc.)
+3. parameter tuning
