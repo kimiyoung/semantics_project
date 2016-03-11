@@ -15,8 +15,9 @@ To train a two-layered unidirectional LSTM reader,
 first unzip `word2vec_embed.tar.gz` to get word2vec embeddings for initializing the embedding layer.
 Then run:
 ```
-python train.py
+python train.py save_path
 ```
+Model after each epoch will be saved to `save_path`.
 
 `BidirectionalLSTMReader.py` and `UniformLSTMReader` in `model/` are under development.
 
