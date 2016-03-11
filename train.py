@@ -7,6 +7,8 @@ from model import DeepLSTMReader
 from model import BidirectionalLSTMReader
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
+save_path = sys.argv[1]
+
 dp = DataPreprocessor.DataPreprocessor()
 data = dp.preprocess("cnn/questions", no_training_set=False)
 
@@ -47,3 +49,4 @@ for epoch in xrange(NUM_EPOCHS):
             print "Epoch %d VAL loss=%.4e acc=%.4f is_candidate=%.3f" % (
                     epoch, total_loss/n, total_acc/n, n_cand/n)
 
+    m.save_model('%s/model_%d.npz'%(save_path,epoch))

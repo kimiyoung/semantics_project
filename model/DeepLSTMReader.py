@@ -4,6 +4,9 @@ import lasagne.layers as L
 import lasagne
 import numpy as np
 from config import *
+from collections import OrderedDict
+
+SCALE=0.1
 
 class Model:
 
@@ -11,7 +14,9 @@ class Model:
 
         input_var, mask_var, target_var = T.itensor3('dq_pair'), T.imatrix('dq_mask'), T.ivector('ans')
 
-        network = self.build_network(vocab_size, W_init, input_var, mask_var, skip_connect=SKIP_CONNECT)
+        self.params = self.init_params(vocab_size, W_init)
+
+        network = self.build_network(vocab_size, input_var, mask_var, skip_connect=SKIP_CONNECT)
         predicted_probs = L.get_output(network)
         predicted_probs_val = L.get_output(network, deterministic=True)
 
@@ -21,13 +26,71 @@ class Model:
         loss_fn_val = T.nnet.categorical_crossentropy(predicted_probs_val, target_var).mean()
         eval_fn_val = lasagne.objectives.categorical_accuracy(predicted_probs_val, target_var).mean()
         
-        all_params = L.get_all_params(network, trainable=True)
-
-        updates = lasagne.updates.rmsprop(loss_fn, all_params, rho=0.95, learning_rate=LEARNING_RATE)
-        updates_with_momentum = lasagne.updates.apply_momentum(updates, params=all_params)
+        updates = lasagne.updates.rmsprop(loss_fn, self.params.values(), rho=0.95, learning_rate=LEARNING_RATE)
+        updates_with_momentum = lasagne.updates.apply_momentum(updates, params=self.params.values())
 
         self.train_fn = theano.function([input_var, target_var, mask_var], [loss_fn, eval_fn, predicted_probs], updates=updates_with_momentum)
         self.validate_fn = theano.function([input_var, target_var, mask_var], [loss_fn_val, eval_fn_val, predicted_probs_val])
+
+    def init_params(self, vocab_size, W_init):
+        params = OrderedDict()
+
+        # lookup
+        params['W_emb'] = theano.shared(W_init)
+
+        def LSTMparams(params, index, skip_connect=False):
+            if skip_connect:
+                in_dim = EMBED_DIM+NUM_HIDDEN
+            else:
+                in_dim = EMBED_DIM
+
+            params['W_lstm%d_xi'%index] = theano.shared(np.random.normal(loc=0., scale=SCALE, 
+                    size=(in_dim,NUM_HIDDEN)).astype('float32'), name='W_lstm%d_xi'%index)
+            params['W_lstm%d_hi'%index] = theano.shared(np.random.normal(loc=0., scale=SCALE, 
+                    size=(NUM_HIDDEN,NUM_HIDDEN)).astype('float32'), name='W_lstm%d_hi'%index)
+            params['W_lstm%d_ci'%index] = theano.shared(np.random.normal(loc=0., scale=SCALE, 
+                    size=(NUM_HIDDEN)).astype('float32'), name='W_lstm%d_ci'%index)
+            params['b_lstm%d_i'%index] = theano.shared(np.zeros((NUM_HIDDEN)).astype('float32'), 
+                    name='b_lstm%d_i'%index)
+
+            params['W_lstm%d_xf'%index] = theano.shared(np.random.normal(loc=0., scale=SCALE, 
+                    size=(in_dim,NUM_HIDDEN)).astype('float32'), name='W_lstm%d_xf'%index)
+            params['W_lstm%d_hf'%index] = theano.shared(np.random.normal(loc=0., scale=SCALE, 
+                    size=(NUM_HIDDEN,NUM_HIDDEN)).astype('float32'), name='W_lstm%d_hf'%index)
+            params['W_lstm%d_cf'%index] = theano.shared(np.random.normal(loc=0., scale=SCALE, 
+                    size=(NUM_HIDDEN)).astype('float32'), name='W_lstm%d_cf'%index)
+            params['b_lstm%d_f'%index] = theano.shared(3*np.ones((NUM_HIDDEN)).astype('float32'), 
+                    name='b_lstm%d_f'%index)
+
+            params['W_lstm%d_xo'%index] = theano.shared(np.random.normal(loc=0., scale=SCALE, 
+                    size=(in_dim,NUM_HIDDEN)).astype('float32'), name='W_lstm%d_xo'%index)
+            params['W_lstm%d_ho'%index] = theano.shared(np.random.normal(loc=0., scale=SCALE, 
+                    size=(NUM_HIDDEN,NUM_HIDDEN)).astype('float32'), name='W_lstm%d_ho'%index)
+            params['W_lstm%d_co'%index] = theano.shared(np.random.normal(loc=0., scale=SCALE, 
+                    size=(NUM_HIDDEN)).astype('float32'), name='W_lstm%d_co'%index)
+            params['b_lstm%d_o'%index] = theano.shared(np.zeros((NUM_HIDDEN)).astype('float32'), 
+                    name='b_lstm%d_o'%index)
+
+            params['W_lstm%d_xc'%index] = theano.shared(np.random.normal(loc=0., scale=SCALE, 
+                    size=(in_dim,NUM_HIDDEN)).astype('float32'), name='W_lstm%d_xc'%index)
+            params['W_lstm%d_hc'%index] = theano.shared(np.random.normal(loc=0., scale=SCALE, 
+                    size=(NUM_HIDDEN,NUM_HIDDEN)).astype('float32'), name='W_lstm%d_hc'%index)
+            params['b_lstm%d_c'%index] = theano.shared(np.zeros((NUM_HIDDEN)).astype('float32'), 
+                    name='b_lstm%d_c'%index)
+
+            return params
+
+        # LSTM layers
+        params = LSTMparams(params, 1)
+        params = LSTMparams(params, 2, skip_connect=SKIP_CONNECT)
+
+        # dense layer
+        params['W_dense'] = theano.shared(np.random.normal(loc=0., scale=SCALE, 
+                size=(2*NUM_HIDDEN,EMBED_DIM)).astype('float32'), name='W_dense')
+        params['b_dense'] = theano.shared(np.zeros((EMBED_DIM,)).astype('float32'), 
+                name='b_dense')
+
+        return params
 
     def train(self, d, q, a, m_d, m_q):
         x = np.concatenate([d, q], axis=1)
@@ -39,23 +102,39 @@ class Model:
         m = np.concatenate([m_d, m_q], axis=1)
         return self.validate_fn(x, a, m)
 
-    def build_network(self, vocab_size, W_init, input_var, mask_var, skip_connect=True):
+    def build_network(self, vocab_size, input_var, mask_var, skip_connect=True):
 
         l_in = L.InputLayer(shape=(None, None, 1), input_var=input_var)
 
         l_mask = L.InputLayer(shape=(None, None), input_var=mask_var)
 
-        l_embed = L.EmbeddingLayer(l_in, input_size=vocab_size, output_size=EMBED_DIM, W=W_init)
+        l_embed = L.EmbeddingLayer(l_in, input_size=vocab_size, output_size=EMBED_DIM, 
+                W=self.params['W_emb'])
 
         l_embed_noise = L.dropout(l_embed, p=DROPOUT_RATE)
 
-        forget_gate_1 = L.Gate(b=lasagne.init.Constant(3))
-        forget_gate_2 = L.Gate(b=lasagne.init.Constant(3))
+        # NOTE: Moved initialization of forget gate biases to init_params
+        #forget_gate_1 = L.Gate(b=lasagne.init.Constant(3))
+        #forget_gate_2 = L.Gate(b=lasagne.init.Constant(3))
 
         # NOTE: LSTM layer provided by Lasagne is slightly different from that used in DeepMind's paper.
         # In the paper the cell-to-* weights are not diagonal.
-        l_fwd_1 = L.LSTMLayer(l_embed_noise, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_mask,
-                gradient_steps=GRAD_STEPS, precompute_input=True, forgetgate=forget_gate_1)
+        # the 1st lstm layer
+        in_gate = L.Gate(W_in=self.params['W_lstm1_xi'], W_hid=self.params['W_lstm1_hi'], 
+                        W_cell=self.params['W_lstm1_ci'], b=self.params['b_lstm1_i'], 
+                        nonlinearity=lasagne.nonlinearities.sigmoid)
+        forget_gate = L.Gate(W_in=self.params['W_lstm1_xf'], W_hid=self.params['W_lstm1_hf'], 
+                        W_cell=self.params['W_lstm1_cf'], b=self.params['b_lstm1_f'], 
+                        nonlinearity=lasagne.nonlinearities.sigmoid)
+        out_gate = L.Gate(W_in=self.params['W_lstm1_xo'], W_hid=self.params['W_lstm1_ho'], 
+                        W_cell=self.params['W_lstm1_co'], b=self.params['b_lstm1_o'], 
+                        nonlinearity=lasagne.nonlinearities.sigmoid)
+        cell_gate = L.Gate(W_in=self.params['W_lstm1_xc'], W_hid=self.params['W_lstm1_hc'], 
+                        W_cell=None, b=self.params['b_lstm1_c'], 
+                        nonlinearity=lasagne.nonlinearities.tanh)
+        l_fwd_1 = L.LSTMLayer(l_embed_noise, NUM_HIDDEN, ingate=in_gate, forgetgate=forget_gate,
+                        cell=cell_gate, outgate=out_gate, peepholes=True, grad_clipping=GRAD_CLIP, 
+                        mask_input=l_mask, gradient_steps=GRAD_STEPS, precompute_input=True)
 
         # the 2nd lstm layer
         if skip_connect:
@@ -71,17 +150,38 @@ class Model:
 
         to_next_layer_noise = L.dropout(to_next_layer, p=DROPOUT_RATE)
 
-        l_fwd_2 = L.LSTMLayer(to_next_layer_noise, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_mask,
-                gradient_steps=GRAD_STEPS, precompute_input=True, forgetgate=forget_gate_2)
+        in_gate = L.Gate(W_in=self.params['W_lstm2_xi'], W_hid=self.params['W_lstm2_hi'], 
+                        W_cell=self.params['W_lstm2_ci'], b=self.params['b_lstm2_i'], 
+                        nonlinearity=lasagne.nonlinearities.sigmoid)
+        forget_gate = L.Gate(W_in=self.params['W_lstm2_xf'], W_hid=self.params['W_lstm2_hf'], 
+                        W_cell=self.params['W_lstm2_cf'], b=self.params['b_lstm2_f'], 
+                        nonlinearity=lasagne.nonlinearities.sigmoid)
+        out_gate = L.Gate(W_in=self.params['W_lstm2_xo'], W_hid=self.params['W_lstm2_ho'], 
+                        W_cell=self.params['W_lstm2_co'], b=self.params['b_lstm2_o'], 
+                        nonlinearity=lasagne.nonlinearities.sigmoid)
+        cell_gate = L.Gate(W_in=self.params['W_lstm2_xc'], W_hid=self.params['W_lstm2_hc'], 
+                        W_cell=None, b=self.params['b_lstm2_c'], 
+                        nonlinearity=lasagne.nonlinearities.tanh)
+        l_fwd_2 = L.LSTMLayer(to_next_layer_noise, NUM_HIDDEN, ingate=in_gate, forgetgate=forget_gate,
+                        cell=cell_gate, outgate=out_gate, peepholes=True, grad_clipping=GRAD_CLIP, 
+                        mask_input=l_mask, gradient_steps=GRAD_STEPS, precompute_input=True)
 
         # slice final states of both lstm layers
         l_fwd_1_slice = L.SliceLayer(l_fwd_1, -1, 1)
         l_fwd_2_slice = L.SliceLayer(l_fwd_2, -1, 1)
 
         # g will be used to score the words based on their embeddings
-        g = L.DenseLayer(L.concat([l_fwd_1_slice, l_fwd_2_slice], axis=1), num_units=EMBED_DIM, W=lasagne.init.GlorotNormal(), nonlinearity=lasagne.nonlinearities.tanh)
+        g = L.DenseLayer(L.concat([l_fwd_1_slice, l_fwd_2_slice], axis=1), num_units=EMBED_DIM, 
+                W=self.params['W_dense'], b=self.params['b_dense'], 
+                nonlinearity=lasagne.nonlinearities.tanh)
 
         # W is shared with the lookup table
-        l_out = L.DenseLayer(g, num_units=vocab_size, W=l_embed.W.T, nonlinearity=lasagne.nonlinearities.softmax, b=None)
+        l_out = L.DenseLayer(g, num_units=vocab_size, W=self.params['W_emb'].T, 
+                nonlinearity=lasagne.nonlinearities.softmax, b=None)
         return l_out
 
+    def save_model(self, save_path):
+        saveparams = OrderedDict()
+        for kk,vv in self.params.iteritems():
+            saveparams[kk] = vv.get_value()
+        np.savez(save_path,**saveparams)
