@@ -6,7 +6,7 @@ class MiniBatchLoader():
 
     def __init__(self, questions, batch_size):
         self.batch_size = batch_size
-        self.doc_len_map = self.build_doc_len_map(questions)
+        self.bins = self.build_bins(questions)
         self.max_qry_len = max(map(lambda x:len(x[1]), questions))
         self.max_num_cand = max(map(lambda x:len(x[3]), questions))
         self.questions = questions
@@ -16,62 +16,66 @@ class MiniBatchLoader():
         """make the object iterable"""
         return self
 
-    def build_doc_len_map(self, questions):
+    def build_bins(self, questions):
         """
         returns a dictionary
             key: document length (rounded to the powers of two)
             value: indexes of questions with document length equal to key
         """
         # round the input to the nearest power of two
-        # example: 500 --> 512, 998 --> 1024
         round_to_power = lambda x: 2**(int(np.log2(x-1))+1)
 
         doc_len = map(lambda x:round_to_power(len(x[0])), questions)
-        doc_len_map = {}
+        bins = {}
         for i, l in enumerate(doc_len):
-            if l not in doc_len_map:
-                doc_len_map[l] = []
-            doc_len_map[l].append(i)
+            if l not in bins:
+                bins[l] = []
+            bins[l].append(i)
 
-        return doc_len_map
+        return bins
 
     def reset(self):
         """new iteration"""
-        # NOTE: for debugging purpuse, we will go through batches of shorter
-        # doc length prior to batches of longer doc length.
-        self.doc_len_iter = iter(sorted(self.doc_len_map.iterkeys()))
-        self.curr_max_doc_len = self.doc_len_iter.next()
         self.ptr = 0
-        # randomly shuffle the question indexes in each bin
-        for question_ix in self.doc_len_map.itervalues():
-            random.shuffle(question_ix)
+
+        # randomly shuffle the question indices in each bin
+        for ixs in self.bins.itervalues():
+            random.shuffle(ixs)
+
+        # construct a list of mini-batches where each batch is a list of question indices
+        # questions within the same batch have identical max document length 
+        self.batch_pool = []
+        for l, ixs in self.bins.iteritems():
+            n = len(ixs)
+            k = n/self.batch_size if n % self.batch_size == 0 else n/self.batch_size+1
+            ixs_list = [(ixs[self.batch_size*i:min(n, self.batch_size*(i+1))],l) for i in range(k)]
+            self.batch_pool += ixs_list
+
+        # randomly shuffle the mini-batches
+        random.shuffle(self.batch_pool)
 
     def next(self):
         """load the next batch"""
-        if self.ptr == len(self.doc_len_map[self.curr_max_doc_len]): # end of each bin
-            try:
-                self.curr_max_doc_len = self.doc_len_iter.next()
-            except StopIteration: # end of all bins
-                self.reset()
-                raise StopIteration()
-            self.ptr = 0
+        if self.ptr == len(self.batch_pool):
+            self.reset()
+            raise StopIteration()
 
-        curr_question_ix = self.doc_len_map[self.curr_max_doc_len]
-        curr_batch_size = min(self.batch_size, len(curr_question_ix)-self.ptr)
+        ixs = self.batch_pool[self.ptr][0]
+        curr_max_doc_len = self.batch_pool[self.ptr][1]
+        curr_batch_size = len(ixs)
 
-        d = np.zeros((curr_batch_size, self.curr_max_doc_len, 1), dtype='int32') # document
+        d = np.zeros((curr_batch_size, curr_max_doc_len, 1), dtype='int32') # document
         q = np.zeros((curr_batch_size, self.max_qry_len, 1), dtype='int32') # query
-        c = np.zeros((curr_batch_size, self.max_num_cand), dtype='int32') # candidate answers
+        c = np.zeros((curr_batch_size, self.max_num_cand), dtype='int32')   # candidate answers
 
-        m_d = np.zeros((curr_batch_size, self.curr_max_doc_len), dtype='int32') # document mask
-        m_q = np.zeros((curr_batch_size, self.max_qry_len), dtype='int32') # query mask
+        m_d = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32')  # document mask
+        m_q = np.zeros((curr_batch_size, self.max_qry_len), dtype='int32')  # query mask
         m_c = np.zeros((curr_batch_size, self.max_num_cand), dtype='int32') # candidate mask
 
-        a = np.zeros((curr_batch_size, ), dtype='int32') # correct answer
+        a = np.zeros((curr_batch_size, ), dtype='int32')    # correct answer
 
-        for n in xrange(curr_batch_size):
+        for n, ix in enumerate(ixs):
 
-            ix = curr_question_ix[self.ptr]
             doc, qry, ans, cand = self.questions[ix][:4]
 
             # document, query and candidates
@@ -84,10 +88,9 @@ class MiniBatchLoader():
             m_q[n,:len(qry)] = 1
             m_c[n,:len(cand)] = 1
 
-            # correct answer
-            a[n] = ans
+            a[n] = ans # answer
 
-            self.ptr += 1
+        self.ptr += 1
 
         return d, q, a, m_d, m_q, c, m_c
 
@@ -111,9 +114,8 @@ def unit_test(mini_batch_loader):
 if __name__ == '__main__':
 
     from DataPreprocessor import *
-    dp = DataPreprocessor()
-    cnn = dp.preprocess("cnn/questions")
-
-    mini_batch_loader = MiniBatchLoader(cnn.validation)
+    
+    cnn = DataPreprocessor().preprocess("cnn/questions", no_training_set=True)
+    mini_batch_loader = MiniBatchLoader(cnn.validation, 64)
     unit_test(mini_batch_loader)
 

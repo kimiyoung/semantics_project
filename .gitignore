@@ -4,3 +4,4 @@
 tags
 *.pyc
 cnn
+word2vec_embed.txt

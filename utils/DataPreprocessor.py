@@ -1,7 +1,9 @@
 import numpy as np
 import glob
 import os
-from config import SYMB_BEGIN, SYMB_END
+
+SYMB_BEGIN = "@begin"
+SYMB_END = "@end"
 
 class Data:
 
