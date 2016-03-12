@@ -22,8 +22,16 @@ m = DeepLSTMReader.Model(data.vocab_size, W_init)
 
 print("training ...")
 num_iter = 0
+prev_acc = 0.
+deltas = []
 for epoch in xrange(NUM_EPOCHS):
     estart = time.time()
+
+    # stopping criterion
+    if len(deltas) > 3 and all(d < 0.0001 for d in deltas[-3:]):
+        print("validation accuracy converged.")
+        m.save_model('%s/model.npz'%save_path)
+        sys.exit()
 
     for d, q, a, m_d, m_q, c, m_c in batch_loader_train:
         loss, acc, probs = m.train(d, q, a, m_d, m_q)
@@ -50,3 +58,11 @@ for epoch in xrange(NUM_EPOCHS):
                     epoch, total_loss/n, total_acc/n, n_cand/n)
 
     m.save_model('%s/model_%d.npz'%(save_path,epoch))
+    
+    # learning schedule
+    del_acc = (total_acc-prev_acc)/abs(prev_acc)
+    if del_acc < 0.01:
+        print("updating learning rate...")
+        m.update_learningrate()
+    prev_acc = total_acc
+    deltas.append(del_acc)

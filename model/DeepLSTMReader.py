@@ -11,26 +11,46 @@ SCALE=0.1
 class Model:
 
     def __init__(self, vocab_size, W_init=lasagne.init.GlorotNormal()):
+        
+        self.rho = 0.95
+        self.learningrate = LEARNING_RATE
 
-        input_var, mask_var, target_var = T.itensor3('dq_pair'), T.imatrix('dq_mask'), T.ivector('ans')
+        self.input_var, self.mask_var, self.target_var = T.itensor3('dq_pair'), T.imatrix('dq_mask'), T.ivector('ans')
 
         self.params = self.init_params(vocab_size, W_init)
 
-        network = self.build_network(vocab_size, input_var, mask_var, skip_connect=SKIP_CONNECT)
-        predicted_probs = L.get_output(network)
-        predicted_probs_val = L.get_output(network, deterministic=True)
+        network = self.build_network(vocab_size, self.input_var, self.mask_var, 
+                skip_connect=SKIP_CONNECT)
+        self.predicted_probs = L.get_output(network)
+        self.predicted_probs_val = L.get_output(network, deterministic=True)
 
-        loss_fn = T.nnet.categorical_crossentropy(predicted_probs, target_var).mean()
-        eval_fn = lasagne.objectives.categorical_accuracy(predicted_probs, target_var).mean()
+        self.loss_fn = T.nnet.categorical_crossentropy(self.predicted_probs, self.target_var).mean()
+        self.eval_fn = lasagne.objectives.categorical_accuracy(self.predicted_probs, 
+                self.target_var).mean()
 
-        loss_fn_val = T.nnet.categorical_crossentropy(predicted_probs_val, target_var).mean()
-        eval_fn_val = lasagne.objectives.categorical_accuracy(predicted_probs_val, target_var).mean()
+        self.loss_fn_val = T.nnet.categorical_crossentropy(self.predicted_probs_val, 
+                self.target_var).mean()
+        self.eval_fn_val = lasagne.objectives.categorical_accuracy(self.predicted_probs_val, 
+                self.target_var).mean()
         
-        updates = lasagne.updates.rmsprop(loss_fn, self.params.values(), rho=0.95, learning_rate=LEARNING_RATE)
+        updates = lasagne.updates.rmsprop(self.loss_fn, self.params.values(), rho=self.rho, 
+                learning_rate=self.learningrate)
         updates_with_momentum = lasagne.updates.apply_momentum(updates, params=self.params.values())
 
-        self.train_fn = theano.function([input_var, target_var, mask_var], [loss_fn, eval_fn, predicted_probs], updates=updates_with_momentum)
-        self.validate_fn = theano.function([input_var, target_var, mask_var], [loss_fn_val, eval_fn_val, predicted_probs_val])
+        self.train_fn = theano.function([self.input_var, self.target_var, self.mask_var], 
+                [self.loss_fn, self.eval_fn, self.predicted_probs], updates=updates_with_momentum)
+        self.validate_fn = theano.function([self.input_var, self.target_var, self.mask_var], 
+                [self.loss_fn_val, self.eval_fn_val, self.predicted_probs_val])
+
+    def update_learningrate(self):
+        self.learningrate = max(1e-6,self.learningrate/2)
+
+        updates = lasagne.updates.rmsprop(self.loss_fn, self.params.values(), rho=self.rho, 
+                learning_rate=self.learningrate)
+        updates_with_momentum = lasagne.updates.apply_momentum(updates, params=self.params.values())
+
+        self.train_fn = theano.function([self.input_var, self.target_var, self.mask_var], 
+                [self.loss_fn, self.eval_fn, self.predicted_probs], updates=updates_with_momentum)
 
     def init_params(self, vocab_size, W_init):
         params = OrderedDict()
