@@ -88,7 +88,8 @@ class MiniBatchLoader():
             m_q[n,:len(qry)] = 1
             m_c[n,:len(cand)] = 1
 
-            a[n] = ans # answer
+            #a[n] = doc.index(ans) # answer idx in document
+            a[n] = ans
 
         self.ptr += 1
 

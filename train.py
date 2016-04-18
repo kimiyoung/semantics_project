@@ -26,7 +26,7 @@ m = DeepLSTMReader.Model(data.vocab_size, W_init)
 
 print("training ...")
 num_iter = 0
-prev_acc = 0.
+prev_acc = 1e-5
 deltas = []
 for epoch in xrange(NUM_EPOCHS):
     estart = time.time()
@@ -60,6 +60,8 @@ for epoch in xrange(NUM_EPOCHS):
 
             print "Epoch %d VAL loss=%.4e acc=%.4f is_candidate=%.3f" % (
                     epoch, total_loss/n, total_acc/n, n_cand/n)
+            #print "Epoch %d VAL loss=%.4e acc=%.4f" % (
+            #        epoch, total_loss/n, total_acc/n)
 
     m.save_model('%s/model_%d.npz'%(save_path,epoch))
     print "After Epoch %d: Train acc=%.4f, Val acc=%.4f" % (epoch, tr_acc, total_acc)
