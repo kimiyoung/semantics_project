@@ -25,6 +25,7 @@ To make predictions
 ```
 python predict.py [lstm_model_path] [output_path]
 ```
+Note `config.py` has to be consistent with the LSTM model when making predictions.
 
 By default, `predict.py` uses bidirectional LSTM. 
 Each line of the prediction file at `output_path` is formatted as
