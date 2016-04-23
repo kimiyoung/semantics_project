@@ -73,10 +73,11 @@ class MiniBatchLoader():
         m_c = np.zeros((curr_batch_size, self.max_num_cand), dtype='int32') # candidate mask
 
         a = np.zeros((curr_batch_size, ), dtype='int32')    # correct answer
+        fnames = ['']*curr_batch_size
 
         for n, ix in enumerate(ixs):
 
-            doc, qry, ans, cand = self.questions[ix][:4]
+            doc, qry, ans, cand, fname = self.questions[ix]
 
             # document, query and candidates
             d[n,:len(doc),0] = np.array(doc)
@@ -89,10 +90,11 @@ class MiniBatchLoader():
             m_c[n,:len(cand)] = 1
 
             a[n] = ans # answer
+            fnames[n] = fname
 
         self.ptr += 1
 
-        return d, q, a, m_d, m_q, c, m_c
+        return d, q, a, m_d, m_q, c, m_c, fnames
 
 def unit_test(mini_batch_loader):
     """unit test to validate MiniBatchLoader using max-frequency (exclusive).

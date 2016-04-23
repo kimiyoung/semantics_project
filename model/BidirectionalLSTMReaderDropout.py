@@ -3,7 +3,6 @@ import theano.tensor as T
 import lasagne.layers as L
 import lasagne
 import numpy as np
-import cPickle as pickle
 from config import *
 
 class Model:
@@ -31,9 +30,31 @@ class Model:
         self.validate_fn = theano.function([input_var, target_var, mask_var], [loss_fn_val, eval_fn_val, predicted_probs_val])
 
     def train(self, d, q, a, m_d, m_q):
-        x = np.concatenate([d, q], axis=1)
-        m = np.concatenate([m_d, m_q], axis=1)
+        x, m = self.mix_document_quary(d, q, m_d, m_q)
         return self.train_fn(x, a, m)
+
+    def mix_document_quary(self, d, q, m_d, m_q):
+
+        period_ix = 4091 # XXX
+
+        n, nd, _ = d.shape
+        _, nq, _ = q.shape
+
+        x = np.zeros(shape=(n,nd+nq,1))
+        m = np.zeros(shape=(n,nd+nq))
+
+        for i, doc in enumerate(d):
+            # positions where periods occur
+            positions = [p for p, w in enumerate(doc) if w[0] == period_ix]
+            if len(positions) == 0:
+                k = 0
+            else:
+                # randomly pick a position to insert
+                k = np.random.choice(positions) + 1
+            x[i] = np.concatenate((d[i,:k,:], q[i], d[i,k:,:]), axis=0)
+            m[i] = np.concatenate((m_d[i,:k], m_q[i], m_d[i,k:]), axis=0)
+
+        return x.astype('int32'), m.astype('int32')
 
     def validate(self, d, q, a, m_d, m_q):
         x = np.concatenate([d, q], axis=1)
@@ -67,14 +88,4 @@ class Model:
         l_out = L.DenseLayer(g, num_units=vocab_size, W=l_embed.W.T, nonlinearity=lasagne.nonlinearities.softmax)
 
         return l_out
-
-    def load_model(self, load_path):
-        with open(load_path, 'r') as f:
-            data = pickle.load(f)
-        L.set_all_param_values(self.network, data)
-
-    def save_model(self, save_path):
-        data = L.get_all_param_values(self.network)
-        with open(save_path, 'w') as f:
-            pickle.dump(data, f)
 
