@@ -31,7 +31,7 @@ m = BidirectionalLSTMReader.Model(data.vocab_size, W_init)
 
 print("training ...")
 num_iter = 0
-prev_acc = 0.
+prev_acc = 1e-5
 deltas = []
 
 logger = open(save_path+'/log','w',0)

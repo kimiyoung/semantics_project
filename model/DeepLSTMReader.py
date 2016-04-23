@@ -15,14 +15,16 @@ class Model:
         self.rho = 0.95
         self.learningrate = LEARNING_RATE
 
-        self.input_var, self.mask_var, self.target_var = T.itensor3('dq_pair'), T.imatrix('dq_mask'), T.ivector('ans')
+        self.input_var, self.mask_var, self.target_var, self.docidx_var, self.docidx_mask_var = T.itensor3('dq_pair'), T.imatrix('dq_mask'), T.ivector('ans'), T.imatrix('doc'), T.imatrix('doc_mask')
 
         self.params = self.init_params(vocab_size, W_init)
 
-        network = self.build_network(vocab_size, self.input_var, self.mask_var, 
+        network = self.build_network(vocab_size, self.input_var, self.mask_var, self.docidx_var, self.docidx_mask_var,
                 skip_connect=SKIP_CONNECT)
         self.predicted_probs = L.get_output(network)
         self.predicted_probs_val = L.get_output(network, deterministic=True)
+        #self.predicted_probs, self.predicted_probs_val = self.build_network(vocab_size, 
+        #        self.input_var, self.mask_var, self.docidx_var, self.docidx_mask_var, skip_connect=SKIP_CONNECT)
 
         self.loss_fn = T.nnet.categorical_crossentropy(self.predicted_probs, self.target_var).mean()
         self.eval_fn = lasagne.objectives.categorical_accuracy(self.predicted_probs, 
@@ -37,10 +39,10 @@ class Model:
                 learning_rate=self.learningrate)
         updates_with_momentum = lasagne.updates.apply_momentum(updates, params=self.params.values())
 
-        self.train_fn = theano.function([self.input_var, self.target_var, self.mask_var], 
-                [self.loss_fn, self.eval_fn, self.predicted_probs], updates=updates_with_momentum)
-        self.validate_fn = theano.function([self.input_var, self.target_var, self.mask_var], 
-                [self.loss_fn_val, self.eval_fn_val, self.predicted_probs_val])
+        self.train_fn = theano.function([self.input_var, self.target_var, self.mask_var, self.docidx_var, self.docidx_mask_var], 
+                [self.loss_fn, self.eval_fn, self.predicted_probs], updates=updates_with_momentum, on_unused_input='warn')
+        self.validate_fn = theano.function([self.input_var, self.target_var, self.mask_var, self.docidx_var, self.docidx_mask_var], 
+                [self.loss_fn_val, self.eval_fn_val, self.predicted_probs_val], on_unused_input='warn')
 
     def update_learningrate(self):
         self.learningrate = max(1e-6,self.learningrate/2)
@@ -49,8 +51,8 @@ class Model:
                 learning_rate=self.learningrate)
         updates_with_momentum = lasagne.updates.apply_momentum(updates, params=self.params.values())
 
-        self.train_fn = theano.function([self.input_var, self.target_var, self.mask_var], 
-                [self.loss_fn, self.eval_fn, self.predicted_probs], updates=updates_with_momentum)
+        self.train_fn = theano.function([self.input_var, self.target_var, self.mask_var, self.docidx_var, self.docidx_mask_var], 
+                [self.loss_fn, self.eval_fn, self.predicted_probs], updates=updates_with_momentum, on_unused_input='warn')
 
     def init_params(self, vocab_size, W_init):
         params = OrderedDict()
@@ -113,16 +115,24 @@ class Model:
         return params
 
     def train(self, d, q, a, m_d, m_q):
-        x = np.concatenate([d, q], axis=1)
-        m = np.concatenate([m_d, m_q], axis=1)
-        return self.train_fn(x, a, m)
+        if MODE=='cqa':
+            x = np.concatenate([d, q], axis=1)
+            m = np.concatenate([m_d, m_q], axis=1)
+        elif MODE=='qca':
+            x = np.concatenate([q, d], axis=1)
+            m = np.concatenate([m_q, m_d], axis=1)
+        return self.train_fn(x, a, m, d.reshape(d.shape[:2]), m_d)
 
     def validate(self, d, q, a, m_d, m_q):
-        x = np.concatenate([d, q], axis=1)
-        m = np.concatenate([m_d, m_q], axis=1)
-        return self.validate_fn(x, a, m)
+        if MODE=='cqa':
+            x = np.concatenate([d, q], axis=1)
+            m = np.concatenate([m_d, m_q], axis=1)
+        elif MODE=='qca':
+            x = np.concatenate([q, d], axis=1)
+            m = np.concatenate([m_q, m_d], axis=1)
+        return self.validate_fn(x, a, m, d.reshape(d.shape[:2]), m_d)
 
-    def build_network(self, vocab_size, input_var, mask_var, skip_connect=True):
+    def build_network(self, vocab_size, input_var, mask_var, docidx_var, docidx_mask, skip_connect=True):
 
         l_in = L.InputLayer(shape=(None, None, 1), input_var=input_var)
 
@@ -194,6 +204,23 @@ class Model:
         g = L.DenseLayer(L.concat([l_fwd_1_slice, l_fwd_2_slice], axis=1), num_units=EMBED_DIM, 
                 W=self.params['W_dense'], b=self.params['b_dense'], 
                 nonlinearity=lasagne.nonlinearities.tanh)
+
+        ## get outputs
+        #g_out = L.get_output(g) # B x D
+        #g_out_val = L.get_output(g, deterministic=True) # B x D
+
+        ## compute softmax probs
+        #probs,_ = theano.scan(fn=lambda g,d,dm,W: T.nnet.softmax(T.dot(g,W[d,:].T)*dm),
+        #                    outputs_info=None,
+        #                    sequences=[g_out,docidx_var,docidx_mask],
+        #                    non_sequences=self.params['W_emb'])
+        #predicted_probs = probs.reshape(docidx_var.shape) # B x N
+        #probs_val,_ = theano.scan(fn=lambda g,d,dm,W: T.nnet.softmax(T.dot(g,W[d,:].T)*dm),
+        #                    outputs_info=None,
+        #                    sequences=[g_out_val,docidx_var,docidx_mask],
+        #                    non_sequences=self.params['W_emb'])
+        #predicted_probs_val = probs_val.reshape(docidx_var.shape) # B x N
+        #return predicted_probs, predicted_probs_val
 
         # W is shared with the lookup table
         l_out = L.DenseLayer(g, num_units=vocab_size, W=self.params['W_emb'].T, 
