@@ -37,9 +37,15 @@ for d, q, a, m_d, m_q, c, m_c, fnames in batch_loader_test:
     predicted = map(lambda x:' '.join(map(lambda i:inv_vocab[i], x)), probs_sorted)
     ground_truth = map(lambda i:inv_vocab[i], a)
 
-    for fname, p, g in zip(fnames, predicted, ground_truth):
-        question_id = fname.split('/')[-1].split('.')[0]
-        fid.write('%s %s %s\n' % (question_id, p, g))
+    n = d.shape[0]
+    for i in xrange(n):
+        question_id = fnames[i].split('/')[-1].split('.')[0]
+        p = predicted[i]
+        g = ground_truth[i]
+        doc_len = m_d[i].sum()
+        qry_len = m_q[i].sum()
+        ans_freq = (d[i] == a[i]).sum()
+        fid.write('%s %d %d %d %s %s\n' % (question_id, doc_len, qry_len, ans_freq, p, g))
 
 fid.close()
 

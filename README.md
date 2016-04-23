@@ -21,7 +21,7 @@ Model after each epoch will be saved to `save_path`.
 
 `BidirectionalLSTMReader.py` and `UniformLSTMReader` in `model/` are under development.
 
-To make predictions
+To make predictions on the test set
 ```
 python predict.py [lstm_model_path] [output_path]
 ```
@@ -30,7 +30,7 @@ Note `config.py` has to be consistent with the LSTM model when making prediction
 By default, `predict.py` uses bidirectional LSTM. 
 Each line of the prediction file at `output_path` is formatted as
 ```
-question_id predicted_ans_1 predicted_ans_2 ... predicted_ans_K true_ans
+question_id doc_len query_len ans_freq pred_ans_1 pred_ans_2 ... pred_ans_K true_ans
 ```
 
 ## Todo
