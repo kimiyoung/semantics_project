@@ -50,8 +50,8 @@ class Model:
         l_docmask = L.InputLayer(shape=(None,None), input_var=docmask_var)
         l_qmask = L.InputLayer(shape=(None,None), input_var=qmask_var)
         l_docembed = L.EmbeddingLayer(l_docin, input_size=vocab_size, 
-                output_size=EMBED_DIM, W=W_init) # B x N x 1 x D
-        l_doce = L.ReshapeLayer(l_docembed, (doc_var.shape[0],doc_var.shape[1],EMBED_DIM)) # B x N x D
+                output_size=EMBED_DIM, W=W_init) # B x N x 1 x DE
+        l_doce = L.ReshapeLayer(l_docembed, (doc_var.shape[0],doc_var.shape[1],EMBED_DIM)) # B x N x DE
         l_qembed = L.EmbeddingLayer(l_qin, input_size=vocab_size, 
                 output_size=EMBED_DIM, W=W_init)
 
@@ -63,11 +63,12 @@ class Model:
         l_fwd_q_slice = L.SliceLayer(l_fwd_q, -1, 1)
         l_bkd_q_slice = L.SliceLayer(l_bkd_q, 0, 1)
         l_q = L.ConcatLayer([l_fwd_q_slice, l_bkd_q_slice]) # B x 2D
-        q = L.get_output(l_q) # B x 2D
-        q_rep = T.reshape(T.tile(q,(1,doc_var.shape[1])), 
-                (doc_var.shape[0],doc_var.shape[1],2*NUM_HIDDEN)) # B x N x 2D
+        l_qd = L.DenseLayer(l_q, EMBED_DIM, nonlinearity=lasagne.nonlinearities.tanh) # B x DE
+        qd = L.get_output(l_qd)
+        q_rep = T.reshape(T.tile(qd,(1,doc_var.shape[1])), 
+                (doc_var.shape[0],doc_var.shape[1],EMBED_DIM)) # B x N x DE
 
-        l_q_rep_in = L.InputLayer(shape=(None,None,2*NUM_HIDDEN), input_var=q_rep)
+        l_q_rep_in = L.InputLayer(shape=(None,None,EMBED_DIM), input_var=q_rep)
         l_doc_gru_in = L.ConcatLayer([l_doce, l_q_rep_in], axis=2)
 
         l_fwd_doc = L.GRULayer(l_doc_gru_in, NUM_HIDDEN, grad_clipping=GRAD_CLIP, 
@@ -77,7 +78,8 @@ class Model:
 
         l_doc = L.concat([l_fwd_doc, l_bkd_doc], axis=2)
 
-        d = L.get_output(l_doc) # B x N x D
+        d = L.get_output(l_doc) # B x N x 2D
+        q = L.get_output(l_q) # B x 2D
         p = T.nnet.softmax(T.batched_dot(d,q)) # B x N
 
         index = T.reshape(T.repeat(T.arange(p.shape[0]),p.shape[1]),p.shape)
