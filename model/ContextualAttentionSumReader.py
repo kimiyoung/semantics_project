@@ -85,7 +85,7 @@ class Model:
         index = T.reshape(T.repeat(T.arange(p.shape[0]),p.shape[1]),p.shape)
         final = T.inc_subtensor(T.alloc(0.,p.shape[0],vocab_size)[index,T.flatten(doc_var,outdim=2)],p)
 
-        return final, l_doc, l_q
+        return final, l_doc, l_qd
 
     def load_model(self, load_path):
         with open(load_path, 'r') as f:
