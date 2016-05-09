@@ -8,6 +8,7 @@ from config import *
 from model import DeepLSTMReader
 from model import BidirectionalLSTMReader
 from model import BidirectionalLSTMReaderDropout
+from model import AttentionSumReader
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 save_path = sys.argv[1]
@@ -27,7 +28,8 @@ batch_loader_val = MiniBatchLoader.MiniBatchLoader(data.validation, 128)
 print("building network ...")
 W_init = Helpers.load_word2vec_embeddings(data.dictionary, WORD2VEC_PATH)
 # m = BidirectionalLSTMReaderDropout.Model(data.vocab_size, W_init)
-m = BidirectionalLSTMReader.Model(data.vocab_size, W_init)
+#m = BidirectionalLSTMReader.Model(data.vocab_size, W_init)
+m = AttentionSumReader.Model(data.vocab_size, W_init)
 
 print("training ...")
 num_iter = 0

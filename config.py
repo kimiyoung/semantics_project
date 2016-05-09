@@ -3,9 +3,9 @@ BATCH_SIZE = 32
 # Gradient clip threshold
 GRAD_CLIP = 10
 # Learning rate
-LEARNING_RATE = 5e-5
+LEARNING_RATE = 1e-4
 # Number of RNN hidden units
-NUM_HIDDEN = 256
+NUM_HIDDEN = 384
 # Maximum number of steps in BPTT
 GRAD_STEPS = -1
 # Number of epochs for training
