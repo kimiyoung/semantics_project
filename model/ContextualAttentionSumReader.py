@@ -16,8 +16,9 @@ class Model:
         #doci_var = T.itensor3('doci')
         target_var = T.ivector('ans')
 
+	Wi = theano.shared(W_init, name='Wi')
         predicted_probs, self.doc_net, self.q_net = self.build_network(vocab_size, doc_var, query_var,
-                docmask_var, qmask_var, W_init)
+                docmask_var, qmask_var, Wi)
         predicted_probs_val = predicted_probs
 
         loss_fn = T.nnet.categorical_crossentropy(predicted_probs, target_var).mean()
@@ -63,8 +64,18 @@ class Model:
         l_fwd_q_slice = L.SliceLayer(l_fwd_q, -1, 1)
         l_bkd_q_slice = L.SliceLayer(l_bkd_q, 0, 1)
         l_q = L.ConcatLayer([l_fwd_q_slice, l_bkd_q_slice]) # B x 2D
-        l_qd = L.DenseLayer(l_q, EMBED_DIM, nonlinearity=lasagne.nonlinearities.tanh) # B x DE
-        qd = L.get_output(l_qd)
+        q = L.get_output(l_q) # B x 2D
+
+        l_fwd_q_c = L.GRULayer(l_qembed, EMBED_DIM/2, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
+                gradient_steps=GRAD_STEPS, precompute_input=True)
+        l_bkd_q_c = L.GRULayer(l_qembed, EMBED_DIM/2, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
+                gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
+
+        l_fwd_q_slice_c = L.SliceLayer(l_fwd_q_c, -1, 1)
+        l_bkd_q_slice_c = L.SliceLayer(l_bkd_q_c, 0, 1)
+        l_q_c = L.ConcatLayer([l_fwd_q_slice_c, l_bkd_q_slice_c]) # B x DE
+
+        qd = L.get_output(l_q_c)
         q_rep = T.reshape(T.tile(qd,(1,doc_var.shape[1])), 
                 (doc_var.shape[0],doc_var.shape[1],EMBED_DIM)) # B x N x DE
 
@@ -79,21 +90,20 @@ class Model:
         l_doc = L.concat([l_fwd_doc, l_bkd_doc], axis=2)
 
         d = L.get_output(l_doc) # B x N x 2D
-        q = L.get_output(l_q) # B x 2D
         p = T.nnet.softmax(T.batched_dot(d,q)) # B x N
 
         index = T.reshape(T.repeat(T.arange(p.shape[0]),p.shape[1]),p.shape)
         final = T.inc_subtensor(T.alloc(0.,p.shape[0],vocab_size)[index,T.flatten(doc_var,outdim=2)],p)
 
-        return final, l_doc, l_qd
+        return final, l_doc, [l_q, l_q_c]
 
     def load_model(self, load_path):
         with open(load_path, 'r') as f:
             data = pickle.load(f)
-        L.set_all_param_values([self.doc_net,self.q_net], data)
+        L.set_all_param_values([self.doc_net]+self.q_net, data)
 
     def save_model(self, save_path):
-        data = L.get_all_param_values([self.doc_net,self.q_net])
+        data = L.get_all_param_values([self.doc_net]+self.q_net)
         with open(save_path, 'w') as f:
             pickle.dump(data, f)
 
