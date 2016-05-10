@@ -52,7 +52,7 @@ class Model:
         l_docembed = L.EmbeddingLayer(l_docin, input_size=vocab_size, 
                 output_size=EMBED_DIM, W=W_init)
         l_qembed = L.EmbeddingLayer(l_qin, input_size=vocab_size, 
-                output_size=EMBED_DIM, W=W_init)
+                output_size=EMBED_DIM, W=l_docembed.W)
 
         l_fwd_doc = L.GRULayer(l_docembed, NUM_HIDDEN, grad_clipping=GRAD_CLIP, 
                 mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True)
@@ -75,7 +75,13 @@ class Model:
         p = T.nnet.softmax(T.batched_dot(d,q)) # B x N
 
         index = T.reshape(T.repeat(T.arange(p.shape[0]),p.shape[1]),p.shape)
-        final = T.inc_subtensor(T.alloc(0.,p.shape[0],vocab_size)[index,T.flatten(doc_var,outdim=2)],p)
+        final = T.inc_subtensor(T.alloc(0.,p.shape[0],vocab_size)[index,T.flatten(doc_var,outdim=2)],
+                p*docmask_var)
+        #qv = T.flatten(query_var,outdim=2)
+        #index2 = T.reshape(T.repeat(T.arange(qv.shape[0]),qv.shape[1]),qv.shape)
+        #xx = index2[qmask_var.nonzero()]
+        #yy = qv[qmask_var.nonzero()]
+        #pV = T.set_subtensor(final[xx,yy], T.zeros_like(qv[xx,yy]))
 
         return final, l_doc, l_q
 
