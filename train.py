@@ -81,7 +81,9 @@ for epoch in xrange(NUM_EPOCHS):
             logger.write(message+'\n')
 
     m.save_model('%s/model_%d.p'%(save_path,epoch))
-    print "After Epoch %d: Train acc=%.4f, Val acc=%.4f" % (epoch, tr_acc, total_acc)
+    message = "After Epoch %d: Train acc=%.4f, Val acc=%.4f" % (epoch, tr_acc, total_acc)
+    print message
+    logger.write(message+'\n')
     
     # # learning schedule
     # del_acc = (total_acc-prev_acc)/abs(prev_acc)
