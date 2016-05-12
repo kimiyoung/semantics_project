@@ -28,12 +28,12 @@ class Model:
 
         params = L.get_all_params(self.doc_net, trainable=True) + L.get_all_params(self.q_net, trainable=True)
         
-        updates = lasagne.updates.rmsprop(loss_fn, params, rho=0.95, learning_rate=LEARNING_RATE)
-        updates_with_momentum = lasagne.updates.apply_momentum(updates, params=params)
+        updates = lasagne.updates.adam(loss_fn, params, learning_rate=LEARNING_RATE)
+        #updates_with_momentum = lasagne.updates.apply_momentum(updates, params=params)
 
         self.train_fn = theano.function([doc_var, query_var, target_var, docmask_var, qmask_var], 
                 [loss_fn, eval_fn, predicted_probs], 
-                updates=updates_with_momentum)
+                updates=updates)
         self.validate_fn = theano.function([doc_var, query_var, target_var, docmask_var, qmask_var], 
                 [loss_fn_val, eval_fn_val, predicted_probs_val])
 
@@ -72,11 +72,12 @@ class Model:
 
         d = L.get_output(l_doc) # B x N x D
         q = L.get_output(l_q) # B x D
-        p = T.nnet.softmax(T.batched_dot(d,q)) # B x N
+        p = T.batched_dot(d,q) # B x N
+        pm = T.nnet.softmax(T.set_subtensor(T.alloc(-20.,p.shape[0],p.shape[1])[docmask_var.nonzero()],
+                p[docmask_var.nonzero()]))
 
         index = T.reshape(T.repeat(T.arange(p.shape[0]),p.shape[1]),p.shape)
-        final = T.inc_subtensor(T.alloc(0.,p.shape[0],vocab_size)[index,T.flatten(doc_var,outdim=2)],
-                p*docmask_var)
+        final = T.inc_subtensor(T.alloc(0.,p.shape[0],vocab_size)[index,T.flatten(doc_var,outdim=2)],pm)
         #qv = T.flatten(query_var,outdim=2)
         #index2 = T.reshape(T.repeat(T.arange(qv.shape[0]),qv.shape[1]),qv.shape)
         #xx = index2[qmask_var.nonzero()]
