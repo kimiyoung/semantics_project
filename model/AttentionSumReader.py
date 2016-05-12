@@ -1,5 +1,4 @@
 import theano
-from theano import sparse
 import theano.tensor as T
 import lasagne.layers as L
 import lasagne
