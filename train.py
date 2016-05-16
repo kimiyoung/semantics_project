@@ -35,7 +35,7 @@ m = ContextualAttentionSumReader.Model(data.vocab_size, W_init)
 
 print("training ...")
 num_iter = 0
-prev_acc = 1e-5
+max_acc = 0.
 deltas = []
 
 logger = open(save_path+'/log','w',0)
@@ -75,8 +75,11 @@ for epoch in xrange(NUM_EPOCHS):
                 total_acc += bsize*acc
                 n += bsize
 
-            message = "Epoch %d VAL loss=%.4e acc=%.4f is_candidate=%.3f" % (
-                epoch, total_loss/n, total_acc/n, n_cand/n)
+            if total_acc/n > max_acc:
+                max_acc = total_acc/n
+                m.save_model('%s/best_model.p'%save_path)
+            message = "Epoch %d VAL loss=%.4e acc=%.4f max_acc=%.4f" % (
+                epoch, total_loss/n, total_acc/n, max_acc)
             print message
             logger.write(message+'\n')
 
