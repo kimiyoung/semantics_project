@@ -69,23 +69,47 @@ class Model:
                 mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
 
         l_doc_1 = L.concat([l_fwd_doc_1, l_bkd_doc_1], axis=2)
-	l_doc_1 = L.dropout(l_doc_1, p=DROPOUT_RATE)
 
-        l_fwd_q_c = L.GRULayer(l_qembed, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
+        l_fwd_q_1 = L.GRULayer(l_qembed, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
                 gradient_steps=GRAD_STEPS, precompute_input=True)
-        l_bkd_q_c = L.GRULayer(l_qembed, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
+        l_bkd_q_1 = L.GRULayer(l_qembed, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
                 gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
 
-        l_fwd_q_slice_c = L.SliceLayer(l_fwd_q_c, -1, 1)
-        l_bkd_q_slice_c = L.SliceLayer(l_bkd_q_c, 0, 1)
-        l_q_c = L.ConcatLayer([l_fwd_q_slice_c, l_bkd_q_slice_c]) # B x DE
+        l_fwd_q_slice_1 = L.SliceLayer(l_fwd_q_1, -1, 1)
+        l_bkd_q_slice_1 = L.SliceLayer(l_bkd_q_1, 0, 1)
+        l_q_c_1 = L.ConcatLayer([l_fwd_q_slice_1, l_bkd_q_slice_1]) # B x DE
 
-        qd = L.get_output(l_q_c)
+        qd = L.get_output(l_q_c_1)
         q_rep = T.reshape(T.tile(qd,(1,doc_var.shape[1])), 
                 (doc_var.shape[0],doc_var.shape[1],2*NUM_HIDDEN)) # B x N x DE
 
         l_q_rep_in = L.InputLayer(shape=(None,None,2*NUM_HIDDEN), input_var=q_rep)
-        l_doc_gru_in = L.ElemwiseMergeLayer([l_doc_1, l_q_rep_in], T.mul)
+        l_doc_2_in = L.ElemwiseMergeLayer([l_doc_1, l_q_rep_in], T.mul)
+	l_doc_2_in = L.dropout(l_doc_2_in, p=DROPOUT_RATE)
+
+        l_fwd_doc_2 = L.GRULayer(l_doc_2_in, NUM_HIDDEN, grad_clipping=GRAD_CLIP, 
+                mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True)
+        l_bkd_doc_2 = L.GRULayer(l_doc_2_in, NUM_HIDDEN, grad_clipping=GRAD_CLIP, 
+                mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
+
+        l_doc_2 = L.concat([l_fwd_doc_2, l_bkd_doc_2], axis=2)
+
+        l_fwd_q_2 = L.GRULayer(l_qembed, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
+                gradient_steps=GRAD_STEPS, precompute_input=True)
+        l_bkd_q_2 = L.GRULayer(l_qembed, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
+                gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
+
+        l_fwd_q_slice_2 = L.SliceLayer(l_fwd_q_2, -1, 1)
+        l_bkd_q_slice_2 = L.SliceLayer(l_bkd_q_2, 0, 1)
+        l_q_c_2 = L.ConcatLayer([l_fwd_q_slice_2, l_bkd_q_slice_2]) # B x DE
+
+        qd2 = L.get_output(l_q_c_2)
+        q_rep2 = T.reshape(T.tile(qd2,(1,doc_var.shape[1])), 
+                (doc_var.shape[0],doc_var.shape[1],2*NUM_HIDDEN)) # B x N x DE
+
+        l_q_rep_in_2 = L.InputLayer(shape=(None,None,2*NUM_HIDDEN), input_var=q_rep2)
+        l_doc_gru_in = L.ElemwiseMergeLayer([l_doc_2, l_q_rep_in_2], T.mul)
+	l_doc_gru_in = L.dropout(l_doc_gru_in, p=DROPOUT_RATE)
 
         l_fwd_doc = L.GRULayer(l_doc_gru_in, NUM_HIDDEN, grad_clipping=GRAD_CLIP, 
                 mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True)
@@ -110,7 +134,7 @@ class Model:
         index = T.reshape(T.repeat(T.arange(p.shape[0]),p.shape[1]),p.shape)
         final_v = T.inc_subtensor(T.alloc(0.,p.shape[0],vocab_size)[index,T.flatten(doc_var,outdim=2)],pm)
 
-        return final, final_v, l_doc, [l_q, l_q_c]
+        return final, final_v, l_doc, [l_q, l_q_c_1, l_q_c_2]
 
     def load_model(self, load_path):
         with open(load_path, 'r') as f:
