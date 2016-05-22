@@ -4,12 +4,13 @@ import random
 
 class MiniBatchLoader():
 
-    def __init__(self, questions, batch_size):
+    def __init__(self, questions, batch_size, shuffle=True):
         self.batch_size = batch_size
         self.bins = self.build_bins(questions)
         self.max_qry_len = max(map(lambda x:len(x[1]), questions))
         self.max_num_cand = max(map(lambda x:len(x[3]), questions))
         self.questions = questions
+        self.shuffle = shuffle
 	self.reset()
 
     def __iter__(self):
@@ -39,8 +40,9 @@ class MiniBatchLoader():
         self.ptr = 0
 
         # randomly shuffle the question indices in each bin
-        for ixs in self.bins.itervalues():
-            random.shuffle(ixs)
+        if self.shuffle:
+            for ixs in self.bins.itervalues():
+                random.shuffle(ixs)
 
         # construct a list of mini-batches where each batch is a list of question indices
         # questions within the same batch have identical max document length 
@@ -52,7 +54,8 @@ class MiniBatchLoader():
             self.batch_pool += ixs_list
 
         # randomly shuffle the mini-batches
-        random.shuffle(self.batch_pool)
+        if self.shuffle:
+            random.shuffle(self.batch_pool)
 
     def next(self):
         """load the next batch"""

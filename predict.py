@@ -2,7 +2,7 @@ import numpy as np
 import sys
 
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
-from model import BidirectionalLSTMReader
+from model import BidirectionalLSTMReader, ContextualAttentionSumReader
 
 # NOTE: config.py should be consistent with the training model
 from config import *
@@ -18,10 +18,10 @@ data = dp.preprocess("cnn/questions", no_training_set=True)
 inv_vocab = data.inv_dictionary
 
 print("building minibatch loaders ...")
-batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.test, 128)
+batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.validation, 128, shuffle=False)
 
 print("building network ...")
-m = BidirectionalLSTMReader.Model(data.vocab_size)
+m = ContextualAttentionSumReader.Model(data.vocab_size)
 
 print("loading model from file...")
 m.load_model(model_path)
@@ -30,6 +30,7 @@ print("predicting ...")
 
 fid = open(output_path,'w',0)
 
+pr = []
 for d, q, a, m_d, m_q, c, m_c, fnames in batch_loader_test:
     loss, acc, probs = m.validate(d, q, a, m_d, m_q)
 
@@ -46,6 +47,8 @@ for d, q, a, m_d, m_q, c, m_c, fnames in batch_loader_test:
         qry_len = m_q[i].sum()
         ans_freq = (d[i] == a[i]).sum()
         fid.write('%s %d %d %d %s %s\n' % (question_id, doc_len, qry_len, ans_freq, p, g))
+	pr.append(probs[i,:])
 
+np.save(output_path+'.probs',np.asarray(pr))
 fid.close()
 
