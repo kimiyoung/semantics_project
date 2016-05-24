@@ -10,6 +10,7 @@ from model import BidirectionalLSTMReader
 from model import BidirectionalLSTMReaderDropout
 from model import AttentionSumReader
 from model import ContextualAttentionSumReader
+from model import L2ContextualAttentionSumReader
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 save_path = sys.argv[1]
@@ -20,7 +21,7 @@ if not os.path.exists(save_path):
 shutil.copyfile('config.py','%s/config.py'%save_path)
 
 dp = DataPreprocessor.DataPreprocessor()
-data = dp.preprocess("cnn/questions", no_training_set=False)
+data = dp.preprocess(DATASET+"/questions", no_training_set=False)
 
 print("building minibatch loaders ...")
 batch_loader_train = MiniBatchLoader.MiniBatchLoader(data.training, BATCH_SIZE)
@@ -31,7 +32,10 @@ W_init = Helpers.load_word2vec_embeddings(data.dictionary, WORD2VEC_PATH)
 # m = BidirectionalLSTMReaderDropout.Model(data.vocab_size, W_init)
 #m = BidirectionalLSTMReader.Model(data.vocab_size, W_init)
 #m = AttentionSumReader.Model(data.vocab_size, W_init)
-m = ContextualAttentionSumReader.Model(data.vocab_size, W_init)
+if NUM_LAYER==3:
+    m = ContextualAttentionSumReader.Model(data.vocab_size, W_init)
+else:
+    m = L2ContextualAttentionSumReader.Model(data.vocab_size, W_init)
 
 print("training ...")
 num_iter = 0
