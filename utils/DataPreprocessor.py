@@ -111,7 +111,7 @@ class DataPreprocessor:
         doc = map(lambda w:dictionary[w], doc_raw)
         qry = map(lambda w:dictionary[w], qry_raw)
         ans = dictionary[ans_raw]
-        cand = map(lambda w:dictionary[w], cand_raw)
+        cand = map(lambda w:dictionary[w] if w in dictionary else 0, cand_raw)
 
         return doc, qry, ans, cand
 
