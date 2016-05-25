@@ -21,7 +21,7 @@ if not os.path.exists(save_path):
 shutil.copyfile('config.py','%s/config.py'%save_path)
 
 dp = DataPreprocessor.DataPreprocessor()
-data = dp.preprocess(DATASET+"/questions", no_training_set=False)
+data = dp.preprocess(DATASET, no_training_set=False)
 
 print("building minibatch loaders ...")
 batch_loader_train = MiniBatchLoader.MiniBatchLoader(data.training, BATCH_SIZE)
