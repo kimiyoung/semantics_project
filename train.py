@@ -28,14 +28,21 @@ batch_loader_train = MiniBatchLoader.MiniBatchLoader(data.training, BATCH_SIZE)
 batch_loader_val = MiniBatchLoader.MiniBatchLoader(data.validation, 128)
 
 print("building network ...")
-W_init = Helpers.load_word2vec_embeddings(data.dictionary, WORD2VEC_PATH)
+if WORD2VEC_PATH is not None:
+    W_init = Helpers.load_word2vec_embeddings(data.dictionary, WORD2VEC_PATH)
 # m = BidirectionalLSTMReaderDropout.Model(data.vocab_size, W_init)
 #m = BidirectionalLSTMReader.Model(data.vocab_size, W_init)
 #m = AttentionSumReader.Model(data.vocab_size, W_init)
 if NUM_LAYER==3:
-    m = ContextualAttentionSumReader.Model(data.vocab_size, W_init)
+    if WORD2VEC_PATH is None:
+        m = ContextualAttentionSumReader.Model(data.vocab_size)
+    else:
+        m = ContextualAttentionSumReader.Model(data.vocab_size, W_init)
 else:
-    m = L2ContextualAttentionSumReader.Model(data.vocab_size, W_init)
+    if WORD2VEC_PATH is None:
+        m = L2ContextualAttentionSumReader.Model(data.vocab_size)
+    else:
+        m = L2ContextualAttentionSumReader.Model(data.vocab_size, W_init)
 
 print("training ...")
 num_iter = 0

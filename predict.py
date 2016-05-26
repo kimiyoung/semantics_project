@@ -16,7 +16,7 @@ top_K = 3
 dp = DataPreprocessor.DataPreprocessor()
 
 # NOTE: make sure vocab.txt is already there!
-data = dp.preprocess("cnn/questions", no_training_set=True)
+data = dp.preprocess(DATASET, no_training_set=True)
 inv_vocab = data.inv_dictionary
 
 print("building minibatch loaders ...")
