@@ -10,14 +10,17 @@ SCALE=0.1
 
 class Model:
 
-    def __init__(self, vocab_size, W_init=lasagne.init.GlorotNormal()):
+    def __init__(self, vocab_size, W_init=lasagne.init.GlorotNormal(), pretrained=None):
         
         self.rho = 0.95
         self.learningrate = LEARNING_RATE
 
         self.input_var, self.mask_var, self.target_var, self.docidx_var, self.docidx_mask_var = T.itensor3('dq_pair'), T.imatrix('dq_mask'), T.ivector('ans'), T.imatrix('doc'), T.imatrix('doc_mask')
 
-        self.params = self.init_params(vocab_size, W_init)
+        if pretrained is not None:
+            self.params = load_params_shared(pretrained)
+        else:
+            self.params = self.init_params(vocab_size, W_init)
 
         network = self.build_network(vocab_size, self.input_var, self.mask_var, self.docidx_var, self.docidx_mask_var,
                 skip_connect=SKIP_CONNECT)
@@ -232,3 +235,17 @@ class Model:
         for kk,vv in self.params.iteritems():
             saveparams[kk] = vv.get_value()
         np.savez(save_path,**saveparams)
+
+def load_params_shared(path):
+    """
+    Load previously saved model
+    """
+    params = OrderedDict()
+
+    with open(path,'r') as f:
+        npzfile = np.load(f)
+        for kk, vv in npzfile.iteritems():
+            params[kk] = theano.shared(vv, name=kk)
+
+    return params
+
