@@ -24,8 +24,10 @@ dp = DataPreprocessor.DataPreprocessor()
 data = dp.preprocess(DATASET, no_training_set=False)
 
 print("building minibatch loaders ...")
-batch_loader_train = MiniBatchLoader.MiniBatchLoader(data.training, BATCH_SIZE)
-batch_loader_val = MiniBatchLoader.MiniBatchLoader(data.validation, 128)
+batch_loader_train = MiniBatchLoader.MiniBatchLoader(data.training, BATCH_SIZE, 
+        candidate_subset=CANDIDATE_SUBSET)
+batch_loader_val = MiniBatchLoader.MiniBatchLoader(data.validation, 128,
+        candidate_subset=CANDIDATE_SUBSET)
 
 print("building network ...")
 if WORD2VEC_PATH is not None:
@@ -66,7 +68,7 @@ for epoch in xrange(NUM_EPOCHS):
         # sys.exit()
 
     for d, q, a, m_d, m_q, c, m_c, fnames in batch_loader_train:
-        loss, tr_acc, probs = m.train(d, q, a, m_d, m_q)
+        loss, tr_acc, probs = m.train(d, q, a, m_d, m_q, m_c)
 
         print "Epoch %d TRAIN loss=%.4e acc=%.4f elapsed=%.1f" % (
                 epoch, loss, tr_acc, time.time()-estart)
@@ -76,10 +78,10 @@ for epoch in xrange(NUM_EPOCHS):
             total_loss, total_acc, n, n_cand = 0., 0., 0, 0.
 
             for d, q, a, m_d, m_q, c, m_c, fnames in batch_loader_val:
-                loss, acc, probs = m.validate(d, q, a, m_d, m_q)
+                loss, acc, probs = m.validate(d, q, a, m_d, m_q, m_c)
 
                 # n_cand = #{prediction is a candidate answer}
-                n_cand += Helpers.count_candidates(probs, c, m_c)
+                #n_cand += Helpers.count_candidates(probs, c, m_c)
 
                 bsize = d.shape[0]
                 total_loss += bsize*loss

@@ -4,13 +4,14 @@ import random
 
 class MiniBatchLoader():
 
-    def __init__(self, questions, batch_size, shuffle=True):
+    def __init__(self, questions, batch_size, shuffle=True, candidate_subset=False):
         self.batch_size = batch_size
         self.bins = self.build_bins(questions)
         self.max_qry_len = max(map(lambda x:len(x[1]), questions))
         self.max_num_cand = max(map(lambda x:len(x[3]), questions))
         self.questions = questions
         self.shuffle = shuffle
+        self.candidate_subset = candidate_subset
 	self.reset()
 
     def __iter__(self):
@@ -73,7 +74,7 @@ class MiniBatchLoader():
 
         m_d = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32')  # document mask
         m_q = np.zeros((curr_batch_size, self.max_qry_len), dtype='int32')  # query mask
-        m_c = np.zeros((curr_batch_size, self.max_num_cand), dtype='int32') # candidate mask
+        m_c = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32') # candidate mask
 
         a = np.zeros((curr_batch_size, ), dtype='int32')    # correct answer
         fnames = ['']*curr_batch_size
@@ -90,7 +91,12 @@ class MiniBatchLoader():
             # masks for document, query and candidates
             m_d[n,:len(doc)] = 1
             m_q[n,:len(qry)] = 1
-            m_c[n,:len(cand)] = 1
+            if not self.candidate_subset:
+                m_c[n,:] = m_d[n,:]
+            else:
+                # search candidates in doc
+                index = [ii for ii in range(len(doc)) if doc[ii] in cand]
+                m_c[n,index] = 1
 
             a[n] = ans # answer
             fnames[n] = fname

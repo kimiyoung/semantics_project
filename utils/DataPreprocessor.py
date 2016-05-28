@@ -101,7 +101,7 @@ class DataPreprocessor:
         doc_raw = raw[2].split() # document
         qry_raw = raw[4].split() # query
         ans_raw = raw[6].strip() # answer
-        cand_raw = map(lambda x:x.split(':')[0], raw[8:]) # candidate answers
+        cand_raw = map(lambda x:x.strip().split(':')[0], raw[8:]) # candidate answers
 
         # wrap the query with special symbols
         qry_raw.insert(0, SYMB_BEGIN)
