@@ -20,6 +20,8 @@ data = dp.preprocess(DATASET, no_training_set=True)
 inv_vocab = data.inv_dictionary
 
 print("building minibatch loaders ...")
+if not 'CANDIDATE_SUBSET' in locals():
+    CANDIDATE_SUBSET = False
 if dataset=='validation':
     batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.validation, 128, shuffle=False, 
             candidate_subset=CANDIDATE_SUBSET)
