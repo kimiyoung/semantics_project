@@ -60,8 +60,8 @@ for d, q, a, m_d, m_q, c, m_c, fnames in batch_loader_test:
         qry_len = m_q[i].sum()
         ans_freq = (d[i] == a[i]).sum()
         fid.write('%s %d %d %d %s %s\n' % (question_id, doc_len, qry_len, ans_freq, p, g))
-	pr.append(probs[i,:])
-        gt.append(a[i])
+        pr.append(probs[i,c[i,:]])
+        gt.append(np.where(c[i,:]==a[i])[0][0])
 
 np.save(output_path+'.probs',np.asarray(pr))
 np.save(output_path+'.gt',np.asarray(gt))

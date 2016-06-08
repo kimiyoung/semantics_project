@@ -8,7 +8,7 @@ w2vfile="word2vec/dailymail/word2vec_embed.txt"
 cp $vocabfile .
 cp $w2vfile .
 
-for dir in $modeldir*/ ; do
+for dir in ${modeldir}mul*/ ; do
     echo $dir
     k=$(echo $dir | cut -f2 -d_ | cut -c1)
     cp $dir/config.py .
