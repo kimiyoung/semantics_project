@@ -127,8 +127,6 @@ class DataPreprocessor:
     def gen_text_for_word2vec(self, question_dir, text_file):
 
             fnames = []
-            fnames += glob.glob(question_dir + "/test/*.question")
-            fnames += glob.glob(question_dir + "/validation/*.question")
             fnames += glob.glob(question_dir + "/training/*.question")
 
             out = open(text_file, "w")
