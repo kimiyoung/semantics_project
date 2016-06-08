@@ -42,12 +42,16 @@ num_iter = 0
 max_acc = 0.
 deltas = []
 
-logger = open(save_path+'/log','w',0)
+logger = open(save_path+'/log','a',0)
 
-print('saving init model')
-m.save_model('%s/model_init.p'%save_path)
-print('loading init model')
-m.load_model('%s/model_init.p'%save_path)
+if os.path.isfile('%s/best_model.p'%save_path):
+    print('loading previously saved model')
+    m.load_model('%s/best_model.p'%save_path)
+else:
+    print('saving init model')
+    m.save_model('%s/model_init.p'%save_path)
+    print('loading init model')
+    m.load_model('%s/model_init.p'%save_path)
 
 for epoch in xrange(NUM_EPOCHS):
     estart = time.time()
