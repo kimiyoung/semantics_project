@@ -11,12 +11,12 @@ class Model:
     def __init__(self, vocab_size, W_init=lasagne.init.GlorotNormal()):
 
         doc_var, query_var = T.itensor3('doc'), T.itensor3('quer')
-        docmask_var, qmask_var = T.imatrix('doc_mask'), T.imatrix('q_mask')
+        docmask_var, qmask_var, candmask_var = T.imatrix('doc_mask'), T.imatrix('q_mask'), T.imatrix('c_mask')
         #doci_var = T.itensor3('doci')
         target_var = T.ivector('ans')
 
         predicted_probs, predicted_probs_val, self.doc_net, self.q_net = self.build_network(vocab_size, 
-		doc_var, query_var, docmask_var, qmask_var, W_init)
+		doc_var, query_var, docmask_var, qmask_var, candmask_var, W_init)
 
         loss_fn = T.nnet.categorical_crossentropy(predicted_probs, target_var).mean()
         eval_fn = lasagne.objectives.categorical_accuracy(predicted_probs, target_var).mean()
@@ -29,19 +29,19 @@ class Model:
         updates = lasagne.updates.adam(loss_fn, params, learning_rate=LEARNING_RATE)
         #updates_with_momentum = lasagne.updates.apply_momentum(updates, params=params)
 
-        self.train_fn = theano.function([doc_var, query_var, target_var, docmask_var, qmask_var], 
+        self.train_fn = theano.function([doc_var, query_var, target_var, docmask_var, qmask_var, candmask_var], 
                 [loss_fn, eval_fn, predicted_probs], 
                 updates=updates)
-        self.validate_fn = theano.function([doc_var, query_var, target_var, docmask_var, qmask_var], 
+        self.validate_fn = theano.function([doc_var, query_var, target_var, docmask_var, qmask_var, candmask_var], 
                 [loss_fn_val, eval_fn_val, predicted_probs_val])
 
-    def train(self, d, q, a, m_d, m_q):
-        return self.train_fn(d, q, a, m_d, m_q)
+    def train(self, d, q, a, m_d, m_q, m_c):
+        return self.train_fn(d, q, a, m_d, m_q, m_c)
 
-    def validate(self, d, q, a, m_d, m_q):
-        return self.validate_fn(d, q, a, m_d, m_q)
+    def validate(self, d, q, a, m_d, m_q, m_c):
+        return self.validate_fn(d, q, a, m_d, m_q, m_c)
 
-    def build_network(self, vocab_size, doc_var, query_var, docmask_var, qmask_var, W_init):
+    def build_network(self, vocab_size, doc_var, query_var, docmask_var, qmask_var, candmask_var, W_init):
 
         l_docin = L.InputLayer(shape=(None,None,1), input_var=doc_var)
         l_qin = L.InputLayer(shape=(None,None,1), input_var=query_var)
@@ -120,16 +120,16 @@ class Model:
 
         d = L.get_output(l_doc) # B x N x 2D
         p = T.batched_dot(d,q) # B x N
-        pm = T.nnet.softmax(T.set_subtensor(T.alloc(-20.,p.shape[0],p.shape[1])[docmask_var.nonzero()],
-                p[docmask_var.nonzero()]))
+        pm = T.nnet.softmax(T.set_subtensor(T.alloc(-20.,p.shape[0],p.shape[1])[candmask_var.nonzero()],
+                p[candmask_var.nonzero()]))
 
         index = T.reshape(T.repeat(T.arange(p.shape[0]),p.shape[1]),p.shape)
         final = T.inc_subtensor(T.alloc(0.,p.shape[0],vocab_size)[index,T.flatten(doc_var,outdim=2)],pm)
 
         dv = L.get_output(l_doc, deterministic=True) # B x N x 2D
         p = T.batched_dot(dv,q) # B x N
-        pm = T.nnet.softmax(T.set_subtensor(T.alloc(-20.,p.shape[0],p.shape[1])[docmask_var.nonzero()],
-                p[docmask_var.nonzero()]))
+        pm = T.nnet.softmax(T.set_subtensor(T.alloc(-20.,p.shape[0],p.shape[1])[candmask_var.nonzero()],
+                p[candmask_var.nonzero()]))
 
         index = T.reshape(T.repeat(T.arange(p.shape[0]),p.shape[1]),p.shape)
         final_v = T.inc_subtensor(T.alloc(0.,p.shape[0],vocab_size)[index,T.flatten(doc_var,outdim=2)],pm)

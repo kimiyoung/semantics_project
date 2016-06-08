@@ -21,21 +21,30 @@ if not os.path.exists(save_path):
 shutil.copyfile('config.py','%s/config.py'%save_path)
 
 dp = DataPreprocessor.DataPreprocessor()
-data = dp.preprocess(DATASET+"/questions", no_training_set=False)
+data = dp.preprocess(DATASET, no_training_set=False)
 
 print("building minibatch loaders ...")
-batch_loader_train = MiniBatchLoader.MiniBatchLoader(data.training, BATCH_SIZE)
-batch_loader_val = MiniBatchLoader.MiniBatchLoader(data.validation, 128)
+batch_loader_train = MiniBatchLoader.MiniBatchLoader(data.training, BATCH_SIZE, 
+        candidate_subset=CANDIDATE_SUBSET)
+batch_loader_val = MiniBatchLoader.MiniBatchLoader(data.validation, 128,
+        candidate_subset=CANDIDATE_SUBSET)
 
 print("building network ...")
-W_init = Helpers.load_word2vec_embeddings(data.dictionary, WORD2VEC_PATH)
+if WORD2VEC_PATH is not None:
+    W_init = Helpers.load_word2vec_embeddings(data.dictionary, WORD2VEC_PATH)
 # m = BidirectionalLSTMReaderDropout.Model(data.vocab_size, W_init)
 #m = BidirectionalLSTMReader.Model(data.vocab_size, W_init)
 #m = AttentionSumReader.Model(data.vocab_size, W_init)
 if NUM_LAYER==3:
-    m = ContextualAttentionSumReader.Model(data.vocab_size, W_init)
+    if WORD2VEC_PATH is None:
+        m = ContextualAttentionSumReader.Model(data.vocab_size)
+    else:
+        m = ContextualAttentionSumReader.Model(data.vocab_size, W_init)
 else:
-    m = L2ContextualAttentionSumReader.Model(data.vocab_size, W_init)
+    if WORD2VEC_PATH is None:
+        m = L2ContextualAttentionSumReader.Model(data.vocab_size)
+    else:
+        m = L2ContextualAttentionSumReader.Model(data.vocab_size, W_init)
 
 print("training ...")
 num_iter = 0
@@ -63,7 +72,7 @@ for epoch in xrange(NUM_EPOCHS):
         # sys.exit()
 
     for d, q, a, m_d, m_q, c, m_c, fnames in batch_loader_train:
-        loss, tr_acc, probs = m.train(d, q, a, m_d, m_q)
+        loss, tr_acc, probs = m.train(d, q, a, m_d, m_q, m_c)
 
         print "Epoch %d TRAIN loss=%.4e acc=%.4f elapsed=%.1f" % (
                 epoch, loss, tr_acc, time.time()-estart)
@@ -73,10 +82,10 @@ for epoch in xrange(NUM_EPOCHS):
             total_loss, total_acc, n, n_cand = 0., 0., 0, 0.
 
             for d, q, a, m_d, m_q, c, m_c, fnames in batch_loader_val:
-                loss, acc, probs = m.validate(d, q, a, m_d, m_q)
+                loss, acc, probs = m.validate(d, q, a, m_d, m_q, m_c)
 
                 # n_cand = #{prediction is a candidate answer}
-                n_cand += Helpers.count_candidates(probs, c, m_c)
+                #n_cand += Helpers.count_candidates(probs, c, m_c)
 
                 bsize = d.shape[0]
                 total_loss += bsize*loss

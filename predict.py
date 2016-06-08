@@ -16,14 +16,18 @@ top_K = 3
 dp = DataPreprocessor.DataPreprocessor()
 
 # NOTE: make sure vocab.txt is already there!
-data = dp.preprocess("cnn/questions", no_training_set=True)
+data = dp.preprocess(DATASET, no_training_set=True)
 inv_vocab = data.inv_dictionary
 
 print("building minibatch loaders ...")
+if not 'CANDIDATE_SUBSET' in locals():
+    CANDIDATE_SUBSET = False
 if dataset=='validation':
-    batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.validation, 128, shuffle=False)
+    batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.validation, 128, shuffle=False, 
+            candidate_subset=CANDIDATE_SUBSET)
 elif dataset=='test':
-    batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.test, 128, shuffle=False)
+    batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.test, 128, shuffle=False,
+            candidate_subset=CANDIDATE_SUBSET)
 
 print("building network ...")
 if K==2:
@@ -41,7 +45,7 @@ fid = open(output_path,'w',0)
 pr = []
 gt = []
 for d, q, a, m_d, m_q, c, m_c, fnames in batch_loader_test:
-    loss, acc, probs = m.validate(d, q, a, m_d, m_q)
+    loss, acc, probs = m.validate(d, q, a, m_d, m_q, m_c)
 
     probs_sorted = np.argpartition(-probs, top_K-1)[:,:top_K]
     predicted = map(lambda x:' '.join(map(lambda i:inv_vocab[i], x)), probs_sorted)
