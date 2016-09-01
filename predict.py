@@ -2,7 +2,7 @@ import numpy as np
 import sys
 
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
-from model import BidirectionalLSTMReader, ContextualAttentionSumReader, L2ContextualAttentionSumReader
+from model import GAReader, GAReaderL2
 
 # NOTE: config.py should be consistent with the training model
 from config import *
@@ -31,9 +31,9 @@ elif dataset=='test':
 
 print("building network ...")
 if K==2:
-    m = L2ContextualAttentionSumReader.Model(data.vocab_size)
+    m = GAReaderL2.Model(data.vocab_size)
 else:
-    m = ContextualAttentionSumReader.Model(data.vocab_size)
+    m = GAReader.Model(data.vocab_size)
 
 print("loading model from file...")
 m.load_model(model_path)

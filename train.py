@@ -5,12 +5,7 @@ import os
 import shutil
 
 from config import *
-from model import DeepLSTMReader
-from model import BidirectionalLSTMReader
-from model import BidirectionalLSTMReaderDropout
-from model import AttentionSumReader
-from model import ContextualAttentionSumReader
-from model import L2ContextualAttentionSumReader
+from model import GAReader, GAReaderL2
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 save_path = sys.argv[1]
@@ -32,19 +27,16 @@ batch_loader_val = MiniBatchLoader.MiniBatchLoader(data.validation, 128,
 print("building network ...")
 if WORD2VEC_PATH is not None:
     W_init = Helpers.load_word2vec_embeddings(data.dictionary, WORD2VEC_PATH)
-# m = BidirectionalLSTMReaderDropout.Model(data.vocab_size, W_init)
-#m = BidirectionalLSTMReader.Model(data.vocab_size, W_init)
-#m = AttentionSumReader.Model(data.vocab_size, W_init)
 if NUM_LAYER==3:
     if WORD2VEC_PATH is None:
-        m = ContextualAttentionSumReader.Model(data.vocab_size)
+        m = GAReader.Model(data.vocab_size)
     else:
-        m = ContextualAttentionSumReader.Model(data.vocab_size, W_init)
+        m = GAReader.Model(data.vocab_size, W_init)
 else:
     if WORD2VEC_PATH is None:
-        m = L2ContextualAttentionSumReader.Model(data.vocab_size)
+        m = GAReaderL2.Model(data.vocab_size)
     else:
-        m = L2ContextualAttentionSumReader.Model(data.vocab_size, W_init)
+        m = GAReaderL2.Model(data.vocab_size, W_init)
 
 print("training ...")
 num_iter = 0
@@ -65,12 +57,6 @@ else:
 for epoch in xrange(NUM_EPOCHS):
     estart = time.time()
 
-    # # stopping criterion
-    # if len(deltas) > 3 and all(d < 0.0001 for d in deltas[-3:]):
-        # print("validation accuracy converged.")
-        # m.save_model('%s/model.p'%save_path)
-        # sys.exit()
-
     for d, q, a, m_d, m_q, c, m_c, fnames in batch_loader_train:
         loss, tr_acc, probs = m.train(d, q, a, m_d, m_q, m_c)
 
@@ -83,9 +69,6 @@ for epoch in xrange(NUM_EPOCHS):
 
             for d, q, a, m_d, m_q, c, m_c, fnames in batch_loader_val:
                 loss, acc, probs = m.validate(d, q, a, m_d, m_q, m_c)
-
-                # n_cand = #{prediction is a candidate answer}
-                #n_cand += Helpers.count_candidates(probs, c, m_c)
 
                 bsize = d.shape[0]
                 total_loss += bsize*loss
@@ -105,12 +88,4 @@ for epoch in xrange(NUM_EPOCHS):
     print message
     logger.write(message+'\n')
     
-    # # learning schedule
-    # del_acc = (total_acc-prev_acc)/abs(prev_acc)
-    # if del_acc < 0.01:
-        # print("updating learning rate...")
-        # m.update_learningrate()
-    # prev_acc = total_acc
-    # deltas.append(del_acc)
-
 logger.close()
