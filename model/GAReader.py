@@ -8,14 +8,13 @@ from config import *
 
 class Model:
 
-    def __init__(self, vocab_size, W_init=lasagne.init.GlorotNormal()):
+    def __init__(self, K, vocab_size, W_init=lasagne.init.GlorotNormal()):
 
         doc_var, query_var = T.itensor3('doc'), T.itensor3('quer')
         docmask_var, qmask_var, candmask_var = T.imatrix('doc_mask'), T.imatrix('q_mask'), T.imatrix('c_mask')
-        #doci_var = T.itensor3('doci')
         target_var = T.ivector('ans')
 
-        predicted_probs, predicted_probs_val, self.doc_net, self.q_net = self.build_network(vocab_size, 
+        predicted_probs, predicted_probs_val, self.doc_net, self.q_net = self.build_network(K, vocab_size, 
 		doc_var, query_var, docmask_var, qmask_var, candmask_var, W_init)
 
         loss_fn = T.nnet.categorical_crossentropy(predicted_probs, target_var).mean()
@@ -27,7 +26,6 @@ class Model:
         params = L.get_all_params(self.doc_net, trainable=True) + L.get_all_params(self.q_net, trainable=True)
         
         updates = lasagne.updates.adam(loss_fn, params, learning_rate=LEARNING_RATE)
-        #updates_with_momentum = lasagne.updates.apply_momentum(updates, params=params)
 
         self.train_fn = theano.function([doc_var, query_var, target_var, docmask_var, qmask_var, candmask_var], 
                 [loss_fn, eval_fn, predicted_probs], 
@@ -41,7 +39,7 @@ class Model:
     def validate(self, d, q, a, m_d, m_q, m_c):
         return self.validate_fn(d, q, a, m_d, m_q, m_c)
 
-    def build_network(self, vocab_size, doc_var, query_var, docmask_var, qmask_var, candmask_var, W_init):
+    def build_network(self, K, vocab_size, doc_var, query_var, docmask_var, qmask_var, candmask_var, W_init):
 
         l_docin = L.InputLayer(shape=(None,None,1), input_var=doc_var)
         l_qin = L.InputLayer(shape=(None,None,1), input_var=query_var)
@@ -63,57 +61,37 @@ class Model:
         l_q = L.ConcatLayer([l_fwd_q_slice, l_bkd_q_slice]) # B x 2D
         q = L.get_output(l_q) # B x 2D
 
-        l_fwd_doc_1 = L.GRULayer(l_doce, NUM_HIDDEN, grad_clipping=GRAD_CLIP, 
+        l_qs = [l_q]
+        for i in range(K-1):
+            l_fwd_doc_1 = L.GRULayer(l_doce, NUM_HIDDEN, grad_clipping=GRAD_CLIP, 
+                    mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True)
+            l_bkd_doc_1 = L.GRULayer(l_doce, NUM_HIDDEN, grad_clipping=GRAD_CLIP, 
+                    mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
+
+            l_doc_1 = L.concat([l_fwd_doc_1, l_bkd_doc_1], axis=2)
+
+            l_fwd_q_1 = L.GRULayer(l_qembed, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
+                    gradient_steps=GRAD_STEPS, precompute_input=True)
+            l_bkd_q_1 = L.GRULayer(l_qembed, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
+                    gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
+
+            l_fwd_q_slice_1 = L.SliceLayer(l_fwd_q_1, -1, 1)
+            l_bkd_q_slice_1 = L.SliceLayer(l_bkd_q_1, 0, 1)
+            l_q_c_1 = L.ConcatLayer([l_fwd_q_slice_1, l_bkd_q_slice_1]) # B x DE
+            
+            l_qs.append(l_q_c_1)
+
+            qd = L.get_output(l_q_c_1)
+            q_rep = T.reshape(T.tile(qd,(1,doc_var.shape[1])), 
+                    (doc_var.shape[0],doc_var.shape[1],2*NUM_HIDDEN)) # B x N x DE
+
+            l_q_rep_in = L.InputLayer(shape=(None,None,2*NUM_HIDDEN), input_var=q_rep)
+            l_doc_2_in = L.ElemwiseMergeLayer([l_doc_1, l_q_rep_in], T.mul)
+            l_doce = L.dropout(l_doc_2_in, p=DROPOUT_RATE)
+
+        l_fwd_doc = L.GRULayer(l_doce, NUM_HIDDEN, grad_clipping=GRAD_CLIP, 
                 mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True)
-        l_bkd_doc_1 = L.GRULayer(l_doce, NUM_HIDDEN, grad_clipping=GRAD_CLIP, 
-                mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
-
-        l_doc_1 = L.concat([l_fwd_doc_1, l_bkd_doc_1], axis=2)
-
-        l_fwd_q_1 = L.GRULayer(l_qembed, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
-                gradient_steps=GRAD_STEPS, precompute_input=True)
-        l_bkd_q_1 = L.GRULayer(l_qembed, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
-                gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
-
-        l_fwd_q_slice_1 = L.SliceLayer(l_fwd_q_1, -1, 1)
-        l_bkd_q_slice_1 = L.SliceLayer(l_bkd_q_1, 0, 1)
-        l_q_c_1 = L.ConcatLayer([l_fwd_q_slice_1, l_bkd_q_slice_1]) # B x DE
-
-        qd = L.get_output(l_q_c_1)
-        q_rep = T.reshape(T.tile(qd,(1,doc_var.shape[1])), 
-                (doc_var.shape[0],doc_var.shape[1],2*NUM_HIDDEN)) # B x N x DE
-
-        l_q_rep_in = L.InputLayer(shape=(None,None,2*NUM_HIDDEN), input_var=q_rep)
-        l_doc_2_in = L.ElemwiseMergeLayer([l_doc_1, l_q_rep_in], T.mul)
-	l_doc_2_in = L.dropout(l_doc_2_in, p=DROPOUT_RATE)
-
-        l_fwd_doc_2 = L.GRULayer(l_doc_2_in, NUM_HIDDEN, grad_clipping=GRAD_CLIP, 
-                mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True)
-        l_bkd_doc_2 = L.GRULayer(l_doc_2_in, NUM_HIDDEN, grad_clipping=GRAD_CLIP, 
-                mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
-
-        l_doc_2 = L.concat([l_fwd_doc_2, l_bkd_doc_2], axis=2)
-
-        l_fwd_q_2 = L.GRULayer(l_qembed, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
-                gradient_steps=GRAD_STEPS, precompute_input=True)
-        l_bkd_q_2 = L.GRULayer(l_qembed, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
-                gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
-
-        l_fwd_q_slice_2 = L.SliceLayer(l_fwd_q_2, -1, 1)
-        l_bkd_q_slice_2 = L.SliceLayer(l_bkd_q_2, 0, 1)
-        l_q_c_2 = L.ConcatLayer([l_fwd_q_slice_2, l_bkd_q_slice_2]) # B x DE
-
-        qd2 = L.get_output(l_q_c_2)
-        q_rep2 = T.reshape(T.tile(qd2,(1,doc_var.shape[1])), 
-                (doc_var.shape[0],doc_var.shape[1],2*NUM_HIDDEN)) # B x N x DE
-
-        l_q_rep_in_2 = L.InputLayer(shape=(None,None,2*NUM_HIDDEN), input_var=q_rep2)
-        l_doc_gru_in = L.ElemwiseMergeLayer([l_doc_2, l_q_rep_in_2], T.mul)
-	l_doc_gru_in = L.dropout(l_doc_gru_in, p=DROPOUT_RATE)
-
-        l_fwd_doc = L.GRULayer(l_doc_gru_in, NUM_HIDDEN, grad_clipping=GRAD_CLIP, 
-                mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True)
-        l_bkd_doc = L.GRULayer(l_doc_gru_in, NUM_HIDDEN, grad_clipping=GRAD_CLIP, 
+        l_bkd_doc = L.GRULayer(l_doce, NUM_HIDDEN, grad_clipping=GRAD_CLIP, 
                 mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
 
         l_doc = L.concat([l_fwd_doc, l_bkd_doc], axis=2)
@@ -134,7 +112,7 @@ class Model:
         index = T.reshape(T.repeat(T.arange(p.shape[0]),p.shape[1]),p.shape)
         final_v = T.inc_subtensor(T.alloc(0.,p.shape[0],vocab_size)[index,T.flatten(doc_var,outdim=2)],pm)
 
-        return final, final_v, l_doc, [l_q, l_q_c_1, l_q_c_2]
+        return final, final_v, l_doc, l_qs
 
     def load_model(self, load_path):
         with open(load_path, 'r') as f:

@@ -2,7 +2,7 @@ import numpy as np
 import sys
 
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
-from model import GAReader, GAReaderL2
+from model import GAReader
 
 # NOTE: config.py should be consistent with the training model
 from config import *
@@ -30,10 +30,7 @@ elif dataset=='test':
             candidate_subset=CANDIDATE_SUBSET)
 
 print("building network ...")
-if K==2:
-    m = GAReaderL2.Model(data.vocab_size)
-else:
-    m = GAReader.Model(data.vocab_size)
+m = GAReader.Model(K, data.vocab_size)
 
 print("loading model from file...")
 m.load_model(model_path)
