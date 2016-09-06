@@ -95,8 +95,10 @@ class Model:
         l_class_in = L.ReshapeLayer(l_ev_lstm3, (dv.shape[0]*dv.shape[1],NUM_HIDDEN)) # BN x D
         l_class = L.DenseLayer(l_class_in, C, b=None, nonlinearity=None) # BN x C
         l_crf_in = L.ReshapeLayer(l_class, (dv.shape[0],dv.shape[1],C)) # B x N x C
-        l_crf = CRFLayer(l_crf_in, C, mask_input=dmv, label_input=tv, normalize=True) # 1
-        l_crfdecode = CRFDecodeLayer(l_crf_in, C, W_sim=l_crf.W_sim, mask_input=dmv) # B x N
+        l_crf = CRFLayer(l_crf_in, C, mask_input=dmv, label_input=tv, normalize=False, \
+                end_points=True) # 1
+        l_crfdecode = CRFDecodeLayer(l_crf_in, C, W_sim=l_crf.W_sim, \
+                W_end_points=l_crf.W_end_points, mask_input=dmv) # B x N
 
         # params
         params = L.get_all_params(l_crf, trainable=True) + \
@@ -115,3 +117,14 @@ class Model:
         data = L.get_all_param_values([self.e_net,self.q_net])
         with open(save_path, 'w') as f:
             pkl.dump(data, f)
+
+if __name__=='__main__':
+    m = Model(5,3)
+    d = np.asarray([[1,0,1,3],[2,2,1,4]]).astype('int32')
+    q = np.asarray([[2,1],[3,1]]).astype('int32')
+    dm = np.asarray([[1,1,1,0],[1,1,0,0]]).astype('int32')
+    qm = np.asarray([[1,1],[1,0]]).astype('int32')
+    a = np.asarray([1,1]).astype('int32')
+    for i in range(10):
+        print 'loss ', m.train(d,q,a,dm,qm,[])[0]
+        print 'acc ', m.validate(d,q,a,dm,qm,[])[1]
