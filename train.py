@@ -5,7 +5,7 @@ import os
 import shutil
 
 from config import *
-from model import GAReader
+from model import GAReaderplus
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 save_path = sys.argv[1]
@@ -27,9 +27,9 @@ batch_loader_val = MiniBatchLoader.MiniBatchLoader(data.validation, 128,
 print("building network ...")
 if WORD2VEC_PATH is not None:
     W_init = Helpers.load_word2vec_embeddings(data.dictionary, WORD2VEC_PATH)
-    m = GAReader.Model(NUM_LAYER, data.vocab_size, W_init)
+    m = GAReaderplus.Model(NUM_LAYER, data.vocab_size, W_init)
 else:
-    m = GAReader.Model(NUM_LAYER, data.vocab_size)
+    m = GAReaderplus.Model(NUM_LAYER, data.vocab_size)
 
 print("training ...")
 num_iter = 0
