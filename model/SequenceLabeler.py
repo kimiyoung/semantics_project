@@ -12,7 +12,6 @@ def prepare_input(d,a,q):
     f = np.zeros(d.shape[:2]).astype('int8')
     ai = (d==a[:,np.newaxis,np.newaxis]).argmax(axis=1).flatten()
     for i in range(d.shape[0]):
-        t[i,:ai[i]] = 0
         t[i,ai[i]] = 1
         t[i,ai[i]+1:] = 2
         f[i,:] = np.in1d(d[i,:,0],q[i,:,0])
@@ -101,10 +100,9 @@ class Model:
                 W_end_points=l_crf.W_end_points, mask_input=dmv) # B x N
 
         # params
-        params = L.get_all_params(l_crf, trainable=True) + \
-                L.get_all_params(l_q_att_out, trainable=True)
         self.e_net = l_crf
         self.q_net = l_q_att_out
+        params = L.get_all_params([self.e_net, self.q_net], trainable=True)
 
         return L.get_output(l_crf), params, L.get_output(l_crfdecode, deterministic=True)
 
