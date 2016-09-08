@@ -62,6 +62,8 @@ class Model:
                 output_size=EMBED_DIM, W=l_docembed.W)
         l_fembed = L.EmbeddingLayer(l_featin, input_size=2, output_size=2) # B x N x 2
 
+        if not EMB_TRAIN: l_docembed.params[l_docembed.W].remove('trainable')
+
         l_fwd_q = L.GRULayer(l_qembed, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
                 gradient_steps=GRAD_STEPS, precompute_input=True)
         l_bkd_q = L.GRULayer(l_qembed, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
