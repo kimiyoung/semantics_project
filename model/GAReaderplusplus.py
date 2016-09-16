@@ -81,22 +81,22 @@ class Model:
             l_bkd_doc_1 = L.GRULayer(l_doce, NUM_HIDDEN, grad_clipping=GRAD_CLIP, 
                     mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
 
-            l_doc_1 = L.concat([l_fwd_doc_1, l_bkd_doc_1], axis=2)
+            l_doc_1 = L.concat([l_fwd_doc_1, l_bkd_doc_1], axis=2) # B x N x DE
 
             l_fwd_q_1 = L.GRULayer(l_qembed, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
                     gradient_steps=GRAD_STEPS, precompute_input=True)
             l_bkd_q_1 = L.GRULayer(l_qembed, NUM_HIDDEN, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
                     gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
 
-            l_fwd_q_slice_1 = L.SliceLayer(l_fwd_q_1, -1, 1)
-            l_bkd_q_slice_1 = L.SliceLayer(l_bkd_q_1, 0, 1)
-            l_q_c_1 = L.ConcatLayer([l_fwd_q_slice_1, l_bkd_q_slice_1]) # B x DE
-            
+            l_q_c_1 = L.ConcatLayer([l_fwd_q_1, l_bkd_q_1], axis=2) # B x Q x DE
             l_qs.append(l_q_c_1)
 
-            qd = L.get_output(l_q_c_1)
-            q_rep = T.reshape(T.tile(qd,(1,doc_var.shape[1])), 
-                    (doc_var.shape[0],doc_var.shape[1],2*NUM_HIDDEN)) # B x N x DE
+            qd = L.get_output(l_q_c_1) # B x Q x DE
+            dd = L.get_output(l_doc_1) # B x N x DE
+            M = T.batched_dot(dd, qd.dimshuffle((0,2,1))) # B x N x Q
+            alphas = T.nnet.softmax(T.reshape(M, (M.shape[0]*M.shape[1],M.shape[2]))) # BN x Q
+            alphas_r = T.reshape(alphas, (M.shape[0],M.shape[1],M.shape[2])) # B x N x Q
+            q_rep = T.batched_dot(alphas_r, qd) # B x N x DE
 
             l_q_rep_in = L.InputLayer(shape=(None,None,2*NUM_HIDDEN), input_var=q_rep)
             l_doc_2_in = L.ElemwiseMergeLayer([l_doc_1, l_q_rep_in], T.mul)

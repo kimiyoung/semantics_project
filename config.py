@@ -11,7 +11,7 @@ GRAD_STEPS = -1
 # Number of epochs for training
 NUM_EPOCHS = 10
 # Dimension of word embedding
-EMBED_DIM = 128
+EMBED_DIM = 100
 # Whether allow skip connection from input to the 2nd layer
 SKIP_CONNECT = True
 # do validation every VALIDATION_FREQ iterations
