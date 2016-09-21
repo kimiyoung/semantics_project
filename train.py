@@ -53,8 +53,10 @@ for epoch in xrange(NUM_EPOCHS):
     for d, q, a, m_d, m_q, c, m_c, fnames in batch_loader_train:
         loss, tr_acc, probs = m.train(d, q, a, m_d, m_q, m_c)
 
-        print "Epoch %d TRAIN loss=%.4e acc=%.4f elapsed=%.1f" % (
+        message = "Epoch %d TRAIN loss=%.4e acc=%.4f elapsed=%.1f" % (
                 epoch, loss, tr_acc, time.time()-estart)
+        print message
+        logger.write(message+'\n')
 
         num_iter += 1
         if num_iter % VALIDATION_FREQ == 0:

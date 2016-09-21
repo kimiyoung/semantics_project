@@ -35,3 +35,5 @@ elif DATASET=='cbtcn' or DATASET=='cbtne':
 REGULARIZATION=0.008
 # train word emb?
 EMB_TRAIN = False
+# subsample
+SUBSAMPLE = 9

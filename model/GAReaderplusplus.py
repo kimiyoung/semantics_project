@@ -12,17 +12,30 @@ def prepare_input(d,q):
         f[i,:] = np.in1d(d[i,:,0],q[i,:,0])
     return f
 
+def sub_sample(m_d, m_c, N):
+    """
+    mask everything except N tokens before and after the candidates
+    """
+    m = np.copy(m_c)
+    for i in range(N):
+        m += np.pad(m_c, ((0,0),(i+1,0)), mode='constant')[:,:-(i+1)] + \
+                np.pad(m_c, ((0,0),(0,i+1)), mode='constant')[:,(i+1):]
+    m[m.nonzero()] = 1
+    return m_d*m
+
 class Model:
 
     def __init__(self, K, vocab_size, W_init=lasagne.init.GlorotNormal()):
 
         doc_var, query_var = T.itensor3('doc'), T.itensor3('quer')
-        docmask_var, qmask_var, candmask_var = T.imatrix('doc_mask'), T.imatrix('q_mask'), T.imatrix('c_mask')
+        docmask_var, qmask_var, candmask_var = T.bmatrix('doc_mask'), T.bmatrix('q_mask'), \
+                T.bmatrix('c_mask')
         target_var = T.ivector('ans')
         feat_var = T.bmatrix('feat')
 
-        predicted_probs, predicted_probs_val, self.doc_net, self.q_net = self.build_network(K, vocab_size, 
-		doc_var, query_var, docmask_var, qmask_var, candmask_var, feat_var, W_init)
+        predicted_probs, predicted_probs_val, self.doc_net, self.q_net = self.build_network(K, \
+                vocab_size, doc_var, query_var, docmask_var, qmask_var, candmask_var, feat_var, \
+                W_init)
 
         loss_fn = T.nnet.categorical_crossentropy(predicted_probs, target_var).mean()
         eval_fn = lasagne.objectives.categorical_accuracy(predicted_probs, target_var).mean()
@@ -30,23 +43,29 @@ class Model:
         loss_fn_val = T.nnet.categorical_crossentropy(predicted_probs_val, target_var).mean()
         eval_fn_val = lasagne.objectives.categorical_accuracy(predicted_probs_val, target_var).mean()
 
-        params = L.get_all_params(self.doc_net, trainable=True) + L.get_all_params(self.q_net, trainable=True)
+        params = L.get_all_params(self.doc_net, trainable=True) + L.get_all_params(self.q_net, \
+                trainable=True)
         
         updates = lasagne.updates.adam(loss_fn, params, learning_rate=LEARNING_RATE)
 
-        self.train_fn = theano.function([doc_var, query_var, target_var, docmask_var, qmask_var, candmask_var, feat_var], 
+        self.train_fn = theano.function([doc_var, query_var, target_var, docmask_var, qmask_var, \
+                candmask_var, feat_var], 
                 [loss_fn, eval_fn, predicted_probs], 
                 updates=updates)
-        self.validate_fn = theano.function([doc_var, query_var, target_var, docmask_var, qmask_var, candmask_var, feat_var], 
+        self.validate_fn = theano.function([doc_var, query_var, target_var, docmask_var, qmask_var, \
+                candmask_var, feat_var], 
                 [loss_fn_val, eval_fn_val, predicted_probs_val])
 
     def train(self, d, q, a, m_d, m_q, m_c):
         f = prepare_input(d,q)
-        return self.train_fn(d, q, a, m_d, m_q, m_c, f)
+        if SUBSAMPLE is not None: m_d = sub_sample(m_d, m_c, SUBSAMPLE)
+        return self.train_fn(d, q, a, m_d.astype('int8'), m_q.astype('int8'), m_c.astype('int8'), f)
 
     def validate(self, d, q, a, m_d, m_q, m_c):
         f = prepare_input(d,q)
-        return self.validate_fn(d, q, a, m_d, m_q, m_c, f)
+        if SUBSAMPLE is not None: m_d = sub_sample(m_d, m_c, SUBSAMPLE)
+        return self.validate_fn(d, q, a, m_d.astype('int8'), m_q.astype('int8'), m_c.astype('int8'), \
+                f)
 
     def build_network(self, K, vocab_size, doc_var, query_var, docmask_var, qmask_var, candmask_var, feat_var, W_init):
 
@@ -94,8 +113,10 @@ class Model:
             qd = L.get_output(l_q_c_1) # B x Q x DE
             dd = L.get_output(l_doc_1) # B x N x DE
             M = T.batched_dot(dd, qd.dimshuffle((0,2,1))) # B x N x Q
-            alphas = T.nnet.softmax(T.reshape(M, (M.shape[0]*M.shape[1],M.shape[2]))) # BN x Q
-            alphas_r = T.reshape(alphas, (M.shape[0],M.shape[1],M.shape[2])) # B x N x Q
+            alphas = T.nnet.softmax(T.reshape(M, (M.shape[0]*M.shape[1],M.shape[2])))
+            alphas_r = T.reshape(alphas, (M.shape[0],M.shape[1],M.shape[2]))* \
+                    qmask_var[:,np.newaxis,:] # B x N x Q
+            alphas_r = alphas_r/alphas_r.sum(axis=2)[:,:,np.newaxis] # B x N x Q
             q_rep = T.batched_dot(alphas_r, qd) # B x N x DE
 
             l_q_rep_in = L.InputLayer(shape=(None,None,2*NUM_HIDDEN), input_var=q_rep)
@@ -140,4 +161,13 @@ class Model:
         data = L.get_all_param_values([self.doc_net]+self.q_net)
         with open(save_path, 'w') as f:
             pickle.dump(data, f)
+
+if __name__=="__main__":
+    m_d = np.asarray([[1,1,1,1,1,0,0,0],[1,1,1,1,1,1,1,0]]).astype('int32')
+    m_c = np.asarray([[1,1,0,0,0,0,0,0],[0,1,0,1,0,0,1,0]]).astype('int32')
+    print 'doc mask', m_d
+    print 'cand mask', m_c
+    print 'new mask (N=1)', sub_sample(m_d, m_c, 1)
+    print 'new mask (N=2)', sub_sample(m_d, m_c, 2)
+    print 'new mask (N=3)', sub_sample(m_d, m_c, 3)
 
