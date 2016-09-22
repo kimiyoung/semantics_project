@@ -3,12 +3,26 @@ import time
 import sys
 import os
 import shutil
+import argparse
+import lasagne
 
 from config import *
-from model import GAReaderplusplus
+from model import GAReaderpp_prior
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
-save_path = sys.argv[1]
+# parse arguments
+parser = argparse.ArgumentParser()
+parser.add_argument('--save_path', dest='save_path', type=str, default='./exp_tmp/', \
+        help='path to save model')
+parser.add_argument('--regularizer', dest='regularizer', type=str, default='l2', \
+        help='l2 or l1 norm for regularizing word embeddings')
+parser.add_argument('--lambda', dest='lambda', type=float, default='0.', \
+        help='weight of regularization')
+args = parser.parse_args()
+params=vars(args)
+save_path = params['save_path']
+F = lasagne.regularization.l2 if params['regularizer']=='l2' else lasagne.regularization.l1
+rlambda = params['lambda']
 
 # save settings
 if not os.path.exists(save_path):
@@ -27,9 +41,9 @@ batch_loader_val = MiniBatchLoader.MiniBatchLoader(data.validation, 128,
 print("building network ...")
 if WORD2VEC_PATH is not None:
     W_init = Helpers.load_word2vec_embeddings(data.dictionary, WORD2VEC_PATH)
-    m = GAReaderplusplus.Model(NUM_LAYER, data.vocab_size, W_init)
+    m = GAReaderpp_prior.Model(NUM_LAYER, data.vocab_size, W_init=W_init, norm=F, rlambda=rlambda)
 else:
-    m = GAReaderplusplus.Model(NUM_LAYER, data.vocab_size)
+    m = GAReaderpp_prior.Model(NUM_LAYER, data.vocab_size)
 
 print("training ...")
 num_iter = 0
