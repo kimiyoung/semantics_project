@@ -4,14 +4,13 @@ import random
 
 class MiniBatchLoader():
 
-    def __init__(self, questions, batch_size, shuffle=True, candidate_subset=False):
+    def __init__(self, questions, batch_size, shuffle=True):
         self.batch_size = batch_size
         self.bins = self.build_bins(questions)
         self.max_qry_len = max(map(lambda x:len(x[1]), questions))
         self.max_num_cand = max(map(lambda x:len(x[3]), questions))
         self.questions = questions
         self.shuffle = shuffle
-        self.candidate_subset = candidate_subset
 	self.reset()
 
     def __iter__(self):
@@ -70,7 +69,8 @@ class MiniBatchLoader():
 
         d = np.zeros((curr_batch_size, curr_max_doc_len, 1), dtype='int32') # document
         q = np.zeros((curr_batch_size, self.max_qry_len, 1), dtype='int32') # query
-        c = np.zeros((curr_batch_size, self.max_num_cand), dtype='int32')   # candidate answers
+        c = np.zeros((curr_batch_size, curr_max_doc_len, self.max_num_cand), 
+                dtype='int16')   # candidate answers
 
         m_d = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32')  # document mask
         m_q = np.zeros((curr_batch_size, self.max_qry_len), dtype='int32')  # query mask
@@ -86,19 +86,18 @@ class MiniBatchLoader():
             # document, query and candidates
             d[n,:len(doc),0] = np.array(doc)
             q[n,:len(qry),0] = np.array(qry)
-            c[n,:len(cand)] = np.array(cand)
 
-            # masks for document, query and candidates
+            # masks for document, query
             m_d[n,:len(doc)] = 1
             m_q[n,:len(qry)] = 1
-            if not self.candidate_subset:
-                m_c[n,:] = m_d[n,:]
-            else:
-                # search candidates in doc
-                index = [ii for ii in range(len(doc)) if doc[ii] in cand]
-                m_c[n,index] = 1
 
-            a[n] = ans # answer
+            # search candidates in doc
+            for it,cc in enumerate(cand):
+                index = [ii for ii in range(len(doc)) if doc[ii] in cc]
+                m_c[n,index] = 1
+                c[n,index,it] = 1
+                if ans==cc: a[n] = it # answer
+
             fnames[n] = fname
 
         self.ptr += 1

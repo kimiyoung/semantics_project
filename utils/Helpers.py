@@ -1,6 +1,8 @@
 import numpy as np
 from config import *
 
+EMBED_DIM=128
+
 def show_predicted_vs_ground_truth(probs, a, inv_dict):
     predicted_ans = map(lambda i:inv_dict[i], list(np.argmax(probs, axis=1)))
     true_ans = map(lambda i:inv_dict[i], list(a))
@@ -25,6 +27,8 @@ def show_question(d, q, a, m_d, m_q, c, m_c, inv_dict):
     print inv_vocab(a[i])
 
 def load_word2vec_embeddings(dictionary, vocab_embed_file):
+    if vocab_embed_file is None: return None, EMBED_DIM
+
     fp = open(vocab_embed_file)
 
     info = fp.readline().split()
@@ -36,8 +40,6 @@ def load_word2vec_embeddings(dictionary, vocab_embed_file):
         vocab_embed[line[0]] = np.array(map(float, line[1:]), dtype='float32')
     fp.close()
 
-    assert embed_dim == EMBED_DIM, "inconsistent dim with word2vec embeddings"
-
     vocab_size = len(dictionary)
     W = np.random.randn(vocab_size, embed_dim).astype('float32')
     n = 0
@@ -46,4 +48,4 @@ def load_word2vec_embeddings(dictionary, vocab_embed_file):
             W[i,:] = vocab_embed[w]
             n += 1
     print "%d/%d vocabs are initialized with word2vec embeddings." % (n, vocab_size)
-    return W
+    return W, embed_dim

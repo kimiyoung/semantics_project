@@ -1,6 +1,7 @@
 import numpy as np
 import glob
 import os
+import sys
 
 SYMB_BEGIN = "@begin"
 SYMB_END = "@end"
@@ -23,7 +24,8 @@ class DataPreprocessor:
         preprocess all data into a standalone Data object.
         the training set will be left out (to save debugging time) when no_training_set is True.
         """
-        dictionary, num_entities = self.make_dictionary(question_dir, vocab_file="vocab.txt")
+        vocab_f = os.path.join(question_dir,"vocab.txt")
+        dictionary, num_entities = self.make_dictionary(question_dir, vocab_file=vocab_f)
         if no_training_set:
             training = None
         else:
@@ -37,7 +39,7 @@ class DataPreprocessor:
         data = Data(dictionary, num_entities, training, validation, test)
         return data
 
-    def make_dictionary(self, question_dir, vocab_file="vocab.txt"):
+    def make_dictionary(self, question_dir, vocab_file):
 
         if os.path.exists(vocab_file):
             print "loading vocabularies from " + vocab_file + " ..."
@@ -101,7 +103,8 @@ class DataPreprocessor:
         doc_raw = raw[2].split() # document
         qry_raw = raw[4].split() # query
         ans_raw = raw[6].strip() # answer
-        cand_raw = map(lambda x:x.strip().split(':')[0], raw[8:]) # candidate answers
+        cand_raw = map(lambda x:x.strip().split(':')[0].split(), 
+                raw[8:]) # candidate answers
 
         # wrap the query with special symbols
         qry_raw.insert(0, SYMB_BEGIN)
@@ -110,8 +113,8 @@ class DataPreprocessor:
         # tokens/entities --> indexes
         doc = map(lambda w:dictionary[w], doc_raw)
         qry = map(lambda w:dictionary[w], qry_raw)
-        ans = dictionary[ans_raw]
-        cand = map(lambda w:dictionary[w] if w in dictionary else 0, cand_raw)
+        ans = map(lambda w:dictionary.get(w,0), ans_raw.split())
+        cand = [map(lambda w:dictionary.get(w,0), c) for c in cand_raw]
 
         return doc, qry, ans, cand
 
