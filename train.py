@@ -4,14 +4,12 @@ import os
 import shutil
 
 from config import *
-from model import GAReaderpp_prior
+from model import GAReader, GAReaderpp_prior
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 def main(save_path, regularizer, rlambda, nhidden, dropout, word2vec, dataset, nlayers, 
-        train_emb, subsample):
+        train_emb, subsample, base_model):
     # save settings
-    if not os.path.exists(save_path):
-        os.mkdir(save_path)
     shutil.copyfile('config.py','%s/config.py'%save_path)
 
     dp = DataPreprocessor.DataPreprocessor()
@@ -23,7 +21,7 @@ def main(save_path, regularizer, rlambda, nhidden, dropout, word2vec, dataset, n
 
     print("building network ...")
     W_init, embed_dim = Helpers.load_word2vec_embeddings(data.dictionary, word2vec)
-    m = GAReaderpp_prior.Model(nlayers, data.vocab_size, W_init, regularizer, rlambda, 
+    m = eval(base_model).Model(nlayers, data.vocab_size, W_init, regularizer, rlambda, 
             nhidden, embed_dim, dropout, train_emb, subsample)
 
     print("training ...")
@@ -42,6 +40,8 @@ def main(save_path, regularizer, rlambda, nhidden, dropout, word2vec, dataset, n
         print('loading init model')
         m.load_model('%s/model_init.p'%save_path)
 
+    epoch_count = 0
+    prev_acc = 0.
     for epoch in xrange(NUM_EPOCHS):
         estart = time.time()
 
@@ -65,17 +65,27 @@ def main(save_path, regularizer, rlambda, nhidden, dropout, word2vec, dataset, n
                     total_acc += bsize*acc
                     n += bsize
 
-                if total_acc/n > max_acc:
-                    max_acc = total_acc/n
+		val_acc = total_acc/n
+                if val_acc > max_acc:
+                    max_acc = val_acc
                     m.save_model('%s/best_model.p'%save_path)
                 message = "Epoch %d VAL loss=%.4e acc=%.4f max_acc=%.4f" % (
-                    epoch, total_loss/n, total_acc/n, max_acc)
+                    epoch, total_loss/n, val_acc, max_acc)
                 print message
                 logger.write(message+'\n')
 
         m.save_model('%s/model_%d.p'%(save_path,epoch))
-        message = "After Epoch %d: Train acc=%.4f, Val acc=%.4f" % (epoch, tr_acc, total_acc)
+        message = "After Epoch %d: Train acc=%.4f, Val acc=%.4f" % (epoch, tr_acc, val_acc)
         print message
         logger.write(message+'\n')
+
+        # stopping criterion / learning schedule
+        if val_acc<prev_acc:
+            epoch_count += 1
+            if epoch_count==2: break
+            m.anneal()
+        else:
+            epoch_count = 0
+            prev_acc = val_acc
         
     logger.close()

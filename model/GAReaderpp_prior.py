@@ -5,23 +5,13 @@ import lasagne
 import numpy as np
 import cPickle as pickle
 from config import *
+from tools import sub_sample
 
 def prepare_input(d,q):
     f = np.zeros(d.shape[:2]).astype('int8')
     for i in range(d.shape[0]):
         f[i,:] = np.in1d(d[i,:,0],q[i,:,0])
     return f
-
-def sub_sample(m_d, m_c, N):
-    """
-    mask everything except N tokens before and after the candidates
-    """
-    m = np.copy(m_c)
-    for i in range(N):
-        m += np.pad(m_c, ((0,0),(i+1,0)), mode='constant')[:,:-(i+1)] + \
-                np.pad(m_c, ((0,0),(0,i+1)), mode='constant')[:,(i+1):]
-    m[m.nonzero()] = 1
-    return m_d*m
 
 class Model:
 
@@ -32,8 +22,9 @@ class Model:
         self.dropout = dropout
         self.train_emb = train_emb
         self.subsample = subsample
+        self.learning_rate = LEARNING_RATE
         norm = lasagne.regularization.l2 if regularizer=='l2' else lasagne.regularization.l1
-        if W_init is None: W_init = lasagne.init.GlorotNormal()
+        if W_init is None: W_init = lasagne.init.GlorotNormal().sample((vocab_size, self.embed_dim))
 
         doc_var, query_var, cand_var = T.itensor3('doc'), T.itensor3('quer'), \
                 T.wtensor3('cand')
@@ -42,33 +33,41 @@ class Model:
         target_var = T.ivector('ans')
         feat_var = T.bmatrix('feat')
 
-        if rlambda> 0.: W_pert = W_init + lasagne.init.GlorotNormal()(W_init.shape)
-        else: W_pert = np.copy(W_init)
-        predicted_probs, predicted_probs_val, self.doc_net, self.q_net, W_emb = self.build_network(K,
+        if rlambda> 0.: W_pert = W_init + lasagne.init.GlorotNormal().sample(W_init.shape)
+        else: W_pert = W_init
+        self.predicted_probs, predicted_probs_val, self.doc_net, self.q_net, W_emb = (
+                self.build_network(K,
                 vocab_size, doc_var, query_var, cand_var, docmask_var, qmask_var, candmask_var,
-                feat_var, W_pert)
+                feat_var, W_pert))
 
-        loss_fn = T.nnet.categorical_crossentropy(predicted_probs, target_var).mean() + \
+        self.loss_fn = T.nnet.categorical_crossentropy(predicted_probs, target_var).mean() + \
                 rlambda*norm(W_emb-W_init)
-        eval_fn = lasagne.objectives.categorical_accuracy(predicted_probs, target_var).mean()
+        self.eval_fn = lasagne.objectives.categorical_accuracy(predicted_probs, target_var).mean()
 
         loss_fn_val = T.nnet.categorical_crossentropy(predicted_probs_val, target_var).mean() + \
                 rlambda*norm(W_emb-W_init)
         eval_fn_val = lasagne.objectives.categorical_accuracy(predicted_probs_val, 
                 target_var).mean()
 
-        params = L.get_all_params(self.doc_net, trainable=True) + \
+        self.params = L.get_all_params(self.doc_net, trainable=True) + \
                 L.get_all_params(self.q_net, trainable=True)
         
         updates = lasagne.updates.adam(loss_fn, params, learning_rate=LEARNING_RATE)
 
-        self.train_fn = theano.function([doc_var, query_var, cand_var, target_var, docmask_var, \
-                qmask_var, candmask_var, feat_var], 
+        self.inps = [doc_var, query_var, cand_var, target_var, docmask_var,
+                qmask_var, candmask_var, feat_var]
+        self.train_fn = theano.function(self.inps,
                 [loss_fn, eval_fn, predicted_probs], 
                 updates=updates)
-        self.validate_fn = theano.function([doc_var, query_var, cand_var, target_var, docmask_var, \
-                qmask_var, candmask_var, feat_var], 
+        self.validate_fn = theano.function(self.inps, 
                 [loss_fn_val, eval_fn_val, predicted_probs_val])
+
+    def anneal(self):
+        self.learning_rate /= 2
+        updates = lasagne.updates.adam(self.loss_fn, self.params, learning_rate=self.learning_rate)
+        self.train_fn = theano.function(self.inps, \
+                [self.loss_fn, self.eval_fn, self.predicted_probs], 
+                updates=updates)
 
     def train(self, d, q, c, a, m_d, m_q, m_c):
         f = prepare_input(d,q)
