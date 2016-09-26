@@ -40,9 +40,9 @@ class Model:
                 vocab_size, doc_var, query_var, cand_var, docmask_var, qmask_var, candmask_var,
                 feat_var, W_pert))
 
-        self.loss_fn = T.nnet.categorical_crossentropy(predicted_probs, target_var).mean() + \
+        self.loss_fn = T.nnet.categorical_crossentropy(self.predicted_probs, target_var).mean() + \
                 rlambda*norm(W_emb-W_init)
-        self.eval_fn = lasagne.objectives.categorical_accuracy(predicted_probs, target_var).mean()
+        self.eval_fn = lasagne.objectives.categorical_accuracy(self.predicted_probs, target_var).mean()
 
         loss_fn_val = T.nnet.categorical_crossentropy(predicted_probs_val, target_var).mean() + \
                 rlambda*norm(W_emb-W_init)
@@ -52,12 +52,12 @@ class Model:
         self.params = L.get_all_params(self.doc_net, trainable=True) + \
                 L.get_all_params(self.q_net, trainable=True)
         
-        updates = lasagne.updates.adam(loss_fn, params, learning_rate=LEARNING_RATE)
+        updates = lasagne.updates.adam(self.loss_fn, self.params, learning_rate=self.learning_rate)
 
         self.inps = [doc_var, query_var, cand_var, target_var, docmask_var,
                 qmask_var, candmask_var, feat_var]
         self.train_fn = theano.function(self.inps,
-                [loss_fn, eval_fn, predicted_probs], 
+                [self.loss_fn, self.eval_fn, self.predicted_probs], 
                 updates=updates)
         self.validate_fn = theano.function(self.inps, 
                 [loss_fn_val, eval_fn_val, predicted_probs_val])
