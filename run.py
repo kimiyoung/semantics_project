@@ -2,6 +2,7 @@ import train
 import test
 import argparse
 import os
+import numpy as np
 
 # parse arguments
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -27,16 +28,21 @@ parser.add_argument('--train_emb', dest='train_emb', type=int, default=0,
         help='Tune word embeddings - (0-No, 1-Yes)')
 parser.add_argument('--subsample', dest='subsample', type=int, default=-1,
         help='Sample window size around candidates. (-1-no sampling)')
+parser.add_argument('--seed', dest='seed', type=int, default=1,
+        help='Seed for different experiments with same settings')
 args = parser.parse_args()
 params=vars(args)
 
+np.random.seed(params['seed'])
+
+# save directory
 w2v_filename = params['word2vec'].split('/')[-1].split('.')[0] if params['word2vec'] else 'None'
 save_path = ('experiments/'+params['model']+'/'+params['dataset'].split('/')[0]+
         '/reg%s'%params['regularizer']+
         '%.3f'%params['lambda']+'_nhid%d'%params['nhidden']+'_nlayers%d'%params['nlayers']+
         '_dropout%.1f'%params['dropout']+'_%s'%w2v_filename+
-        '_train%d'%params['train_emb']+'_subsample%d'%params['subsample']+'/')
-
+        '_train%d'%params['train_emb']+'_subsample%d'%params['subsample']+
+        '_seed%d'%params['seed']+'/')
 if not os.path.exists(save_path): os.makedirs(save_path)
 
 # train
