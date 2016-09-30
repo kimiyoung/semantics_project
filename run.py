@@ -47,12 +47,8 @@ if not os.path.exists(save_path): os.makedirs(save_path)
 
 # train
 if params['mode']<2:
-    train.main(save_path, params['regularizer'], params['lambda'], params['nhidden'],
-            params['dropout'], params['word2vec'], params['dataset'], params['nlayers'],
-            params['train_emb'], params['subsample'], params['model'])
+    train.main(save_path, params)
 
 # test
 if params['mode']!=1:
-    test.main(save_path, params['regularizer'], params['lambda'], params['nhidden'],
-            params['dropout'], params['word2vec'], params['dataset'], params['nlayers'],
-            params['train_emb'], params['subsample'], params['model'])
+    test.main(save_path, params)

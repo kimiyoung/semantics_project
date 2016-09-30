@@ -5,8 +5,19 @@ from config import *
 from model import GAReader, GAReaderpp_prior
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
-def main(load_path, regularizer, rlambda, nhidden, dropout, word2vec, dataset, nlayers, 
-        train_emb, subsample, base_model):
+def main(save_path, params):
+
+    regularizer = params['regularizer']
+    rlambda = params['lambda']
+    nhidden = params['nhidden']
+    dropout = params['dropout']
+    word2vec = params['word2vec']
+    dataset = params['dataset']
+    nlayers = params['nlayers']
+    train_emb = params['train_emb']
+    subsample = params['subsample']
+    base_model = params['model']
+
     # load settings
     shutil.copyfile('%s/config.py'%load_path,'config.py')
 
