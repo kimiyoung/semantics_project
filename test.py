@@ -5,7 +5,7 @@ from config import *
 from model import GAReader, GAReaderpp_prior
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
-def main(save_path, params):
+def main(load_path, params):
 
     regularizer = params['regularizer']
     rlambda = params['lambda']
