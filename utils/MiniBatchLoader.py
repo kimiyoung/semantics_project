@@ -2,6 +2,8 @@ import glob
 import numpy as np
 import random
 
+from config import MAX_WORD_LEN
+
 class MiniBatchLoader():
 
     def __init__(self, questions, batch_size, shuffle=True):
@@ -9,6 +11,7 @@ class MiniBatchLoader():
         self.bins = self.build_bins(questions)
         self.max_qry_len = max(map(lambda x:len(x[1]), questions))
         self.max_num_cand = max(map(lambda x:len(x[3]), questions))
+        self.max_word_len = max(map(lambda x:max(map(lambda w:len(w), x[4]+x[5])), questions))
         self.questions = questions
         self.shuffle = shuffle
 	self.reset()
@@ -67,42 +70,66 @@ class MiniBatchLoader():
         curr_max_doc_len = self.batch_pool[self.ptr][1]
         curr_batch_size = len(ixs)
 
-        d = np.zeros((curr_batch_size, curr_max_doc_len, 1), dtype='int32') # document
-        q = np.zeros((curr_batch_size, self.max_qry_len, 1), dtype='int32') # query
+        dw = np.zeros((curr_batch_size, curr_max_doc_len, 1), dtype='int32') # document words
+        qw = np.zeros((curr_batch_size, self.max_qry_len, 1), dtype='int32') # query words
         c = np.zeros((curr_batch_size, curr_max_doc_len, self.max_num_cand), 
                 dtype='int16')   # candidate answers
 
-        m_d = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32')  # document mask
-        m_q = np.zeros((curr_batch_size, self.max_qry_len), dtype='int32')  # query mask
+        m_dw = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32')  # document word mask
+        m_qw = np.zeros((curr_batch_size, self.max_qry_len), dtype='int32')  # query word mask
         m_c = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32') # candidate mask
 
         a = np.zeros((curr_batch_size, ), dtype='int32')    # correct answer
         fnames = ['']*curr_batch_size
 
+        types = {}
+
         for n, ix in enumerate(ixs):
 
-            doc, qry, ans, cand, fname = self.questions[ix]
+            doc_w, qry_w, ans, cand, doc_c, qry_c, fname = self.questions[ix]
 
             # document, query and candidates
-            d[n,:len(doc),0] = np.array(doc)
-            q[n,:len(qry),0] = np.array(qry)
-
-            # masks for document, query
-            m_d[n,:len(doc)] = 1
-            m_q[n,:len(qry)] = 1
+            dw[n,:len(doc_w),0] = np.array(doc_w)
+            qw[n,:len(qry_w),0] = np.array(qry_w)
+            m_dw[n,:len(doc_w)] = 1
+            m_qw[n,:len(qry_w)] = 1
+            for it, word in enumerate(doc_c):
+                wtuple = tuple(word)
+                if wtuple not in types:
+                    types[wtuple] = []
+                types[wtuple].append((0,n,it))
+            for it, word in enumerate(qry_c):
+                wtuple = tuple(word)
+                if wtuple not in types:
+                    types[wtuple] = []
+                types[wtuple].append((1,n,it))
 
             # search candidates in doc
             for it,cc in enumerate(cand):
-                index = [ii for ii in range(len(doc)) if doc[ii] in cc]
+                index = [ii for ii in range(len(doc_w)) if doc_w[ii] in cc]
                 m_c[n,index] = 1
                 c[n,index,it] = 1
                 if ans==cc: a[n] = it # answer
 
             fnames[n] = fname
 
+        # create type character matrix and indices for doc, qry
+        dt = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32') # document token index
+        qt = np.zeros((curr_batch_size, self.max_qry_len), dtype='int32') # query token index
+        tt = np.zeros((len(types), self.max_word_len), dtype='int32') # type characters
+        tm = np.zeros((len(types), self.max_word_len), dtype='int32') # type mask
+        n = 0
+        for k,v in types.iteritems():
+            tt[n,:len(k)] = np.array(k)
+            tm[n,:len(k)] = 1
+            for (sw, bn, sn) in v:
+                if sw==0: dt[bn,sn] = n
+                else: qt[bn,sn] = n
+            n += 1
+
         self.ptr += 1
 
-        return d, q, a, m_d, m_q, c, m_c, fnames
+        return dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, fnames
 
 def unit_test(mini_batch_loader):
     """unit test to validate MiniBatchLoader using max-frequency (exclusive).

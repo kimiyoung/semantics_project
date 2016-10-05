@@ -15,7 +15,9 @@ parser.add_argument('--regularizer', dest='regularizer', type=str, default='l2',
 parser.add_argument('--lambda', dest='lambda', type=float, default=0.,
         help='weight of regularization')
 parser.add_argument('--nhidden', dest='nhidden', type=int, default=256,
-        help='GRU hiddent state size')
+        help='GRU hidden state size')
+parser.add_argument('--char_dim', dest='char_dim', type=int, default=50,
+        help='Size of char embeddings (0 to turn off). Char GRU hidden size = 2*char_dim.')
 parser.add_argument('--nlayers', dest='nlayers', type=int, default=2,
         help='Number of reader layers')
 parser.add_argument('--dropout', dest='dropout', type=float, default=0.3,
@@ -40,7 +42,7 @@ w2v_filename = params['word2vec'].split('/')[-1].split('.')[0] if params['word2v
 save_path = ('experiments/'+params['model']+'/'+params['dataset'].split('/')[0]+
         '/reg%s'%params['regularizer']+
         '%.3f'%params['lambda']+'_nhid%d'%params['nhidden']+'_nlayers%d'%params['nlayers']+
-        '_dropout%.1f'%params['dropout']+'_%s'%w2v_filename+
+        '_dropout%.1f'%params['dropout']+'_%s'%w2v_filename+'_chardim%d'%params['char_dim']+
         '_train%d'%params['train_emb']+'_subsample%d'%params['subsample']+
         '_seed%d'%params['seed']+'/')
 if not os.path.exists(save_path): os.makedirs(save_path)

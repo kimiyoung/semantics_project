@@ -10,3 +10,5 @@ GRAD_STEPS = -1
 NUM_EPOCHS = 10
 # do validation every VALIDATION_FREQ iterations
 VALIDATION_FREQ = 100
+# maximum word length for character model
+MAX_WORD_LEN = 10

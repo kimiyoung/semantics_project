@@ -3,6 +3,8 @@ import glob
 import os
 import sys
 
+from config import MAX_WORD_LEN
+
 SYMB_BEGIN = "@begin"
 SYMB_END = "@end"
 
@@ -13,9 +15,10 @@ class Data:
         self.training = training
         self.validation = validation
         self.test = test
-        self.vocab_size = len(dictionary)
+        self.vocab_size = len(dictionary[0])
+        self.num_chars = len(dictionary[1])
         self.num_entities = num_entities
-        self.inv_dictionary = {v: k for k, v in dictionary.items()}
+        self.inv_dictionary = {v:k for k,v in dictionary[0].items()}
 
 class DataPreprocessor:
 
@@ -25,7 +28,9 @@ class DataPreprocessor:
         the training set will be left out (to save debugging time) when no_training_set is True.
         """
         vocab_f = os.path.join(question_dir,"vocab.txt")
-        dictionary, num_entities = self.make_dictionary(question_dir, vocab_file=vocab_f)
+        word_dictionary, char_dictionary, num_entities = \
+                self.make_dictionary(question_dir, vocab_file=vocab_f)
+        dictionary = (word_dictionary, char_dictionary)
         if no_training_set:
             training = None
         else:
@@ -86,19 +91,24 @@ class DataPreprocessor:
             vocab_fp.close()
 
         vocab_size = len(vocabularies)
-        dictionary = dict(zip(vocabularies, range(vocab_size)))
+        word_dictionary = dict(zip(vocabularies, range(vocab_size)))
+        char_set = set([c for w in vocabularies for c in list(w)])
+        char_set.add(' ')
+        char_dictionary = dict(zip(list(char_set), range(len(char_set))))
         num_entities = len([v for v in vocabularies if v.startswith('@entity')])
         print "vocab_size = %d" % vocab_size
+        print "num characters = %d" % len(char_set)
         print "%d anonymoused entities" % num_entities
         print "%d other tokens (including @placeholder, %s and %s)" % (
                 vocab_size-num_entities, SYMB_BEGIN, SYMB_END)
 
-        return dictionary, num_entities
+        return word_dictionary, char_dictionary, num_entities
 
     def parse_one_file(self, fname, dictionary):
         """
         parse a *.question file into tuple(document, query, answer, filename)
         """
+        w_dict, c_dict = dictionary[0], dictionary[1]
         raw = open(fname).readlines()
         doc_raw = raw[2].split() # document
         qry_raw = raw[4].split() # query
@@ -111,12 +121,16 @@ class DataPreprocessor:
         qry_raw.append(SYMB_END)
 
         # tokens/entities --> indexes
-        doc = map(lambda w:dictionary[w], doc_raw)
-        qry = map(lambda w:dictionary[w], qry_raw)
-        ans = map(lambda w:dictionary.get(w,0), ans_raw.split())
-        cand = [map(lambda w:dictionary.get(w,0), c) for c in cand_raw]
+        doc_words = map(lambda w:w_dict[w], doc_raw)
+        qry_words = map(lambda w:w_dict[w], qry_raw)
+        doc_chars = map(lambda w:map(lambda c:c_dict.get(c,c_dict[' ']), 
+            list(w)[:MAX_WORD_LEN]), doc_raw)
+        qry_chars = map(lambda w:map(lambda c:c_dict.get(c,c_dict[' ']), 
+            list(w)[:MAX_WORD_LEN]), qry_raw)
+        ans = map(lambda w:w_dict.get(w,0), ans_raw.split())
+        cand = [map(lambda w:w_dict.get(w,0), c) for c in cand_raw]
 
-        return doc, qry, ans, cand
+        return doc_words, qry_words, ans, cand, doc_chars, qry_chars
 
     def parse_all_files(self, directory, dictionary):
         """

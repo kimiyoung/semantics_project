@@ -19,6 +19,7 @@ def main(save_path, params):
     train_emb = params['train_emb']
     subsample = params['subsample']
     base_model = params['model']
+    char_dim = params['char_dim']
 
     # save settings
     shutil.copyfile('config.py','%s/config.py'%save_path)
@@ -28,12 +29,12 @@ def main(save_path, params):
 
     print("building minibatch loaders ...")
     batch_loader_train = MiniBatchLoader.MiniBatchLoader(data.training, BATCH_SIZE)
-    batch_loader_val = MiniBatchLoader.MiniBatchLoader(data.validation, 128)
+    batch_loader_val = MiniBatchLoader.MiniBatchLoader(data.validation, BATCH_SIZE)
 
     print("building network ...")
-    W_init, embed_dim = Helpers.load_word2vec_embeddings(data.dictionary, word2vec)
-    m = eval(base_model).Model(nlayers, data.vocab_size, W_init, regularizer, rlambda, 
-            nhidden, embed_dim, dropout, train_emb, subsample)
+    W_init, embed_dim, = Helpers.load_word2vec_embeddings(data.dictionary[0], word2vec)
+    m = eval(base_model).Model(nlayers, data.vocab_size, data.num_chars, W_init, 
+            regularizer, rlambda, nhidden, embed_dim, dropout, train_emb, subsample, char_dim)
 
     print("training ...")
     num_iter = 0
@@ -56,8 +57,8 @@ def main(save_path, params):
     for epoch in xrange(NUM_EPOCHS):
         estart = time.time()
 
-        for d, q, a, m_d, m_q, c, m_c, fnames in batch_loader_train:
-            loss, tr_acc, probs = m.train(d, q, c, a, m_d, m_q, m_c)
+        for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, fnames in batch_loader_train:
+            loss, tr_acc, probs = m.train(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c)
 
             message = "Epoch %d TRAIN loss=%.4e acc=%.4f elapsed=%.1f" % (
                     epoch, loss, tr_acc, time.time()-estart)
@@ -68,10 +69,10 @@ def main(save_path, params):
             if num_iter % VALIDATION_FREQ == 0:
                 total_loss, total_acc, n, n_cand = 0., 0., 0, 0.
 
-                for d, q, a, m_d, m_q, c, m_c, fnames in batch_loader_val:
-                    loss, acc, probs = m.validate(d, q, c, a, m_d, m_q, m_c)
+                for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, fnames in batch_loader_val:
+                    loss, acc, probs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c)
 
-                    bsize = d.shape[0]
+                    bsize = dw.shape[0]
                     total_loss += bsize*loss
                     total_acc += bsize*acc
                     n += bsize

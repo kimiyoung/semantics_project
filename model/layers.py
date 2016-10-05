@@ -8,6 +8,21 @@ def theano_logsumexp(x, axis=None):
     xmax_ = x.max(axis=axis)
     return xmax_ + T.log(T.exp(x - xmax).sum(axis=axis))
 
+class IndexLayer(L.MergeLayer):
+    """
+    Layer which takes two inputs: a tensor D with arbitrary shape, and integer values,
+    and a 2D lookup tensor whose rows are indices in D. Returns the first tensor with
+    its each value replaced by the lookup from second tensor. This is similar to 
+    EmbeddingLayer, but the lookup matrix is not a parameter, and can be of arbitrary
+    size
+    """
+
+    def get_output_shape_for(self, input_shapes):
+        return input_shapes[0] + (input_shapes[1][-1],)
+
+    def get_output_for(self, inputs, **kwargs):
+        return inputs[1][inputs[0]]
+
 class CRFLayer(L.Layer):
 
     def __init__(self, incoming, num_classes, W_sim = lasagne.init.GlorotUniform(), mask_input = None, label_input = None, normalize = False, end_points = False, **kwargs):

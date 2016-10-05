@@ -6,6 +6,7 @@ import numpy as np
 import cPickle as pickle
 from config import *
 from tools import sub_sample
+from layers import IndexLayer
 
 def prepare_input(d,q):
     f = np.zeros(d.shape[:2]).astype('int8')
@@ -15,15 +16,18 @@ def prepare_input(d,q):
 
 class Model:
 
-    def __init__(self, K, vocab_size, W_init, regularizer, rlambda, nhidden, embed_dim,
-            dropout, train_emb, subsample):
+    def __init__(self, K, vocab_size, num_chars, W_init, regularizer, rlambda, 
+            nhidden, embed_dim, dropout, train_emb, subsample, char_dim):
         self.nhidden = nhidden
         self.embed_dim = embed_dim
         self.dropout = dropout
         self.train_emb = train_emb
         self.subsample = subsample
+        self.char_dim = char_dim
         self.learning_rate = LEARNING_RATE
+        self.num_chars = num_chars
         norm = lasagne.regularization.l2 if regularizer=='l2' else lasagne.regularization.l1
+        self.use_chars = self.char_dim!=0
         if W_init is None: W_init = lasagne.init.GlorotNormal().sample((vocab_size, self.embed_dim))
 
         doc_var, query_var, cand_var = T.itensor3('doc'), T.itensor3('quer'), \
@@ -32,35 +36,37 @@ class Model:
                 T.bmatrix('c_mask')
         target_var = T.ivector('ans')
         feat_var = T.bmatrix('feat')
+        doc_toks, qry_toks= T.imatrix('dchars'), T.imatrix('qchars')
+        tok_var, tok_mask = T.imatrix('tok'), T.bmatrix('tok_mask')
+        self.inps = [doc_var, doc_toks, query_var, qry_toks, cand_var, target_var, docmask_var,
+                qmask_var, tok_var, tok_mask, candmask_var, feat_var]
 
         if rlambda> 0.: W_pert = W_init + lasagne.init.GlorotNormal().sample(W_init.shape)
         else: W_pert = W_init
         self.predicted_probs, predicted_probs_val, self.doc_net, self.q_net, W_emb = (
-                self.build_network(K,
-                vocab_size, doc_var, query_var, cand_var, docmask_var, qmask_var, candmask_var,
-                feat_var, W_pert))
+                self.build_network(K, vocab_size, W_pert))
 
         self.loss_fn = T.nnet.categorical_crossentropy(self.predicted_probs, target_var).mean() + \
                 rlambda*norm(W_emb-W_init)
-        self.eval_fn = lasagne.objectives.categorical_accuracy(self.predicted_probs, target_var).mean()
+        self.eval_fn = lasagne.objectives.categorical_accuracy(self.predicted_probs, 
+                target_var).mean()
 
         loss_fn_val = T.nnet.categorical_crossentropy(predicted_probs_val, target_var).mean() + \
                 rlambda*norm(W_emb-W_init)
         eval_fn_val = lasagne.objectives.categorical_accuracy(predicted_probs_val, 
                 target_var).mean()
 
-        self.params = L.get_all_params(self.doc_net, trainable=True) + \
-                L.get_all_params(self.q_net, trainable=True)
+        self.params = L.get_all_params([self.doc_net]+self.q_net, trainable=True)
         
         updates = lasagne.updates.adam(self.loss_fn, self.params, learning_rate=self.learning_rate)
 
-        self.inps = [doc_var, query_var, cand_var, target_var, docmask_var,
-                qmask_var, candmask_var, feat_var]
         self.train_fn = theano.function(self.inps,
                 [self.loss_fn, self.eval_fn, self.predicted_probs], 
-                updates=updates)
+                updates=updates,
+                on_unused_input='warn')
         self.validate_fn = theano.function(self.inps, 
-                [loss_fn_val, eval_fn_val, predicted_probs_val])
+                [loss_fn_val, eval_fn_val, predicted_probs_val],
+                on_unused_input='warn')
 
     def anneal(self):
         self.learning_rate /= 2
@@ -69,44 +75,74 @@ class Model:
                 [self.loss_fn, self.eval_fn, self.predicted_probs], 
                 updates=updates)
 
-    def train(self, d, q, c, a, m_d, m_q, m_c):
-        f = prepare_input(d,q)
-        if self.subsample!=-1: m_d = sub_sample(m_d, m_c, self.subsample)
-        return self.train_fn(d, q, c, a, 
-                m_d.astype('int8'), m_q.astype('int8'), m_c.astype('int8'), f)
+    def train(self, dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c):
+        f = prepare_input(dw,qw)
+        if self.subsample!=-1: m_dw = sub_sample(m_dw, m_c, self.subsample)
+        return self.train_fn(dw, dt, qw, qt, c, a, 
+                m_dw.astype('int8'), m_qw.astype('int8'), 
+                tt, tm.astype('int8'), 
+                m_c.astype('int8'), f)
 
-    def validate(self, d, q, c, a, m_d, m_q, m_c):
-        f = prepare_input(d,q)
-        if self.subsample!=-1: m_d = sub_sample(m_d, m_c, self.subsample)
-        return self.validate_fn(d, q, c, 
-                a, m_d.astype('int8'), m_q.astype('int8'), m_c.astype('int8'), f)
+    def validate(self, dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c):
+        f = prepare_input(dw,qw)
+        if self.subsample!=-1: m_dw = sub_sample(m_dw, m_c, self.subsample)
+        return self.validate_fn(dw, dt, qw, qt, c, a, 
+                m_dw.astype('int8'), m_qw.astype('int8'), 
+                tt, tm.astype('int8'), 
+                m_c.astype('int8'), f)
 
-    def build_network(self, K, vocab_size, doc_var, query_var, cand_var, docmask_var, qmask_var, 
-            candmask_var, feat_var, W_init):
+    def build_network(self, K, vocab_size, W_init):
 
-        l_docin = L.InputLayer(shape=(None,None,1), input_var=doc_var)
-        l_qin = L.InputLayer(shape=(None,None,1), input_var=query_var)
-        l_docmask = L.InputLayer(shape=(None,None), input_var=docmask_var)
-        l_qmask = L.InputLayer(shape=(None,None), input_var=qmask_var)
-        l_featin = L.InputLayer(shape=(None,None), input_var=feat_var)
+        l_docin = L.InputLayer(shape=(None,None,1), input_var=self.inps[0])
+        l_doctokin = L.InputLayer(shape=(None,None), input_var=self.inps[1])
+        l_qin = L.InputLayer(shape=(None,None,1), input_var=self.inps[2])
+        l_qtokin = L.InputLayer(shape=(None,None), input_var=self.inps[3])
+        l_docmask = L.InputLayer(shape=(None,None), input_var=self.inps[6])
+        l_qmask = L.InputLayer(shape=(None,None), input_var=self.inps[7])
+        l_tokin = L.InputLayer(shape=(None,MAX_WORD_LEN), input_var=self.inps[8])
+        l_tokmask = L.InputLayer(shape=(None,MAX_WORD_LEN), input_var=self.inps[9])
+        l_featin = L.InputLayer(shape=(None,None), input_var=self.inps[11])
+
+        doc_shp = self.inps[1].shape
+        qry_shp = self.inps[3].shape
+
         l_docembed = L.EmbeddingLayer(l_docin, input_size=vocab_size, 
                 output_size=self.embed_dim, W=W_init) # B x N x 1 x DE
         l_doce = L.ReshapeLayer(l_docembed, 
-                (doc_var.shape[0],doc_var.shape[1],self.embed_dim)) # B x N x DE
+                (doc_shp[0],doc_shp[1],self.embed_dim)) # B x N x DE
         l_qembed = L.EmbeddingLayer(l_qin, input_size=vocab_size, 
                 output_size=self.embed_dim, W=l_docembed.W)
+        l_qembed = L.ReshapeLayer(l_qembed, 
+                (qry_shp[0],qry_shp[1],self.embed_dim)) # B x N x DE
         l_fembed = L.EmbeddingLayer(l_featin, input_size=2, output_size=2) # B x N x 2
 
         if self.train_emb==0: l_docembed.params[l_docembed.W].remove('trainable')
 
-        l_fwd_q = L.GRULayer(l_qembed, self.nhidden, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
-                gradient_steps=GRAD_STEPS, precompute_input=True)
-        l_bkd_q = L.GRULayer(l_qembed, self.nhidden, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
-                gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
+        # char embeddings
+        if self.use_chars:
+            l_lookup = L.EmbeddingLayer(l_tokin, self.num_chars, 2*self.char_dim) # T x L x D
+            l_fgru = L.GRULayer(l_lookup, self.char_dim, grad_clipping=GRAD_CLIP, 
+                    mask_input=l_tokmask, gradient_steps=GRAD_STEPS, precompute_input=True,
+                    only_return_final=True)
+            l_bgru = L.GRULayer(l_lookup, 2*self.char_dim, grad_clipping=GRAD_CLIP, 
+                    mask_input=l_tokmask, gradient_steps=GRAD_STEPS, precompute_input=True, 
+                    backwards=True, only_return_final=True) # T x 2D
+            l_fwdembed = L.DenseLayer(l_fgru, self.embed_dim/2, nonlinearity=None) # T x DE/2
+            l_bckembed = L.DenseLayer(l_bgru, self.embed_dim/2, nonlinearity=None) # T x DE/2
+            l_embed = L.ElemwiseSumLayer([l_fwdembed, l_bckembed], coeffs=1)
+            l_docchar_embed = IndexLayer([l_doctokin, l_embed]) # B x N x DE/2
+            l_qchar_embed = IndexLayer([l_qtokin, l_embed]) # B x Q x DE/2
 
-        l_fwd_q_slice = L.SliceLayer(l_fwd_q, -1, 1)
-        l_bkd_q_slice = L.SliceLayer(l_bkd_q, 0, 1)
-        l_q = L.ConcatLayer([l_fwd_q_slice, l_bkd_q_slice]) # B x 2D
+            l_doce = L.ConcatLayer([l_doce, l_docchar_embed], axis=2)
+            l_qembed = L.ConcatLayer([l_qembed, l_qchar_embed], axis=2)
+
+        l_fwd_q = L.GRULayer(l_qembed, self.nhidden, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
+                gradient_steps=GRAD_STEPS, precompute_input=True, only_return_final=True)
+        l_bkd_q = L.GRULayer(l_qembed, self.nhidden, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
+                gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True, 
+                only_return_final=True)
+
+        l_q = L.ConcatLayer([l_fwd_q, l_bkd_q]) # B x 2D
         q = L.get_output(l_q) # B x 2D
 
         l_qs = [l_q]
@@ -132,7 +168,7 @@ class Model:
             M = T.batched_dot(dd, qd.dimshuffle((0,2,1))) # B x N x Q
             alphas = T.nnet.softmax(T.reshape(M, (M.shape[0]*M.shape[1],M.shape[2])))
             alphas_r = T.reshape(alphas, (M.shape[0],M.shape[1],M.shape[2]))* \
-                    qmask_var[:,np.newaxis,:] # B x N x Q
+                    self.inps[7][:,np.newaxis,:] # B x N x Q
             alphas_r = alphas_r/alphas_r.sum(axis=2)[:,:,np.newaxis] # B x N x Q
             q_rep = T.batched_dot(alphas_r, qd) # B x N x DE
 
@@ -151,15 +187,15 @@ class Model:
 
         d = L.get_output(l_doc) # B x N x 2D
         p = T.batched_dot(d,q) # B x N
-        pm = T.nnet.softmax(p)*candmask_var
+        pm = T.nnet.softmax(p)*self.inps[10]
         pm = pm/pm.sum(axis=1)[:,np.newaxis]
-        final = T.batched_dot(pm, cand_var)
+        final = T.batched_dot(pm, self.inps[4])
 
         dv = L.get_output(l_doc, deterministic=True) # B x N x 2D
         p = T.batched_dot(dv,q) # B x N
-        pm = T.nnet.softmax(p)*candmask_var
+        pm = T.nnet.softmax(p)*self.inps[10]
         pm = pm/pm.sum(axis=1)[:,np.newaxis]
-        final_v = T.batched_dot(pm, cand_var)
+        final_v = T.batched_dot(pm, self.inps[4])
 
         return final, final_v, l_doc, l_qs, l_docembed.W
 

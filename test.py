@@ -17,6 +17,7 @@ def main(load_path, params):
     train_emb = params['train_emb']
     subsample = params['subsample']
     base_model = params['model']
+    char_dim = params['char_dim']
 
     # load settings
     shutil.copyfile('%s/config.py'%load_path,'config.py')
@@ -26,12 +27,12 @@ def main(load_path, params):
     inv_vocab = data.inv_dictionary
 
     print("building minibatch loaders ...")
-    batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.test, 512)
+    batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.test, BATCH_SIZE)
 
     print("building network ...")
-    W_init, embed_dim = Helpers.load_word2vec_embeddings(data.dictionary, word2vec)
-    m = eval(base_model).Model(nlayers, data.vocab_size, W_init, regularizer, rlambda, 
-            nhidden, embed_dim, dropout, train_emb, subsample)
+    W_init, embed_dim = Helpers.load_word2vec_embeddings(data.dictionary[0], word2vec)
+    m = eval(base_model).Model(nlayers, data.vocab_size, data.num_chars, W_init, 
+            regularizer, rlambda, nhidden, embed_dim, dropout, train_emb, subsample, char_dim)
     m.load_model('%s/best_model.p'%load_path)
 
     print("testing ...")
@@ -39,10 +40,10 @@ def main(load_path, params):
         batch_loader_test.max_num_cand)).astype('float32')
     fids = []
     total_loss, total_acc, n = 0., 0., 0
-    for d, q, a, m_d, m_q, c, m_c, fnames in batch_loader_test:
-        loss, acc, probs = m.validate(d, q, c, a, m_d, m_q, m_c)
+    for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, fnames in batch_loader_test:
+        loss, acc, probs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c)
 
-        bsize = d.shape[0]
+        bsize = dw.shape[0]
         total_loss += bsize*loss
         total_acc += bsize*acc
 
