@@ -4,7 +4,7 @@ import os
 import shutil
 
 from config import *
-from model import GAReader, GAReaderpp_prior
+from model import GAReader, GAReaderpp_prior, StanfordAR
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 def main(save_path, params):
@@ -20,12 +20,14 @@ def main(save_path, params):
     subsample = params['subsample']
     base_model = params['model']
     char_dim = params['char_dim']
+    use_feat = params['use_feat']
 
     # save settings
     shutil.copyfile('config.py','%s/config.py'%save_path)
 
+    use_chars = char_dim>0
     dp = DataPreprocessor.DataPreprocessor()
-    data = dp.preprocess(dataset, no_training_set=False)
+    data = dp.preprocess(dataset, no_training_set=False, use_chars=use_chars)
 
     print("building minibatch loaders ...")
     batch_loader_train = MiniBatchLoader.MiniBatchLoader(data.training, BATCH_SIZE)
@@ -34,7 +36,8 @@ def main(save_path, params):
     print("building network ...")
     W_init, embed_dim, = Helpers.load_word2vec_embeddings(data.dictionary[0], word2vec)
     m = eval(base_model).Model(nlayers, data.vocab_size, data.num_chars, W_init, 
-            regularizer, rlambda, nhidden, embed_dim, dropout, train_emb, subsample, char_dim)
+            regularizer, rlambda, nhidden, embed_dim, dropout, train_emb, subsample, 
+            char_dim, use_feat)
 
     print("training ...")
     num_iter = 0

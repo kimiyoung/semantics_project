@@ -2,7 +2,7 @@ import numpy as np
 import shutil
 
 from config import *
-from model import GAReader, GAReaderpp_prior
+from model import GAReader, GAReaderpp_prior, StanfordAR
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 def main(load_path, params):
@@ -18,6 +18,7 @@ def main(load_path, params):
     subsample = params['subsample']
     base_model = params['model']
     char_dim = params['char_dim']
+    use_feat = params['use_feat']
 
     # load settings
     shutil.copyfile('%s/config.py'%load_path,'config.py')
@@ -32,7 +33,8 @@ def main(load_path, params):
     print("building network ...")
     W_init, embed_dim = Helpers.load_word2vec_embeddings(data.dictionary[0], word2vec)
     m = eval(base_model).Model(nlayers, data.vocab_size, data.num_chars, W_init, 
-            regularizer, rlambda, nhidden, embed_dim, dropout, train_emb, subsample, char_dim)
+            regularizer, rlambda, nhidden, embed_dim, dropout, train_emb, subsample, 
+            char_dim, use_feat)
     m.load_model('%s/best_model.p'%load_path)
 
     print("testing ...")

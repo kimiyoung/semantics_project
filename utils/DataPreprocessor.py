@@ -22,7 +22,7 @@ class Data:
 
 class DataPreprocessor:
 
-    def preprocess(self, question_dir, no_training_set=False):
+    def preprocess(self, question_dir, no_training_set=False, use_chars=True):
         """
         preprocess all data into a standalone Data object.
         the training set will be left out (to save debugging time) when no_training_set is True.
@@ -35,11 +35,11 @@ class DataPreprocessor:
             training = None
         else:
             print "preparing training data ..."
-            training = self.parse_all_files(question_dir + "/training", dictionary)
+            training = self.parse_all_files(question_dir + "/training", dictionary, use_chars)
         print "preparing validation data ..."
-        validation = self.parse_all_files(question_dir + "/validation", dictionary)
+        validation = self.parse_all_files(question_dir + "/validation", dictionary, use_chars)
         print "preparing test data ..."
-        test = self.parse_all_files(question_dir + "/test", dictionary)
+        test = self.parse_all_files(question_dir + "/test", dictionary, use_chars)
 
         data = Data(dictionary, num_entities, training, validation, test)
         return data
@@ -104,7 +104,7 @@ class DataPreprocessor:
 
         return word_dictionary, char_dictionary, num_entities
 
-    def parse_one_file(self, fname, dictionary):
+    def parse_one_file(self, fname, dictionary, use_chars):
         """
         parse a *.question file into tuple(document, query, answer, filename)
         """
@@ -123,22 +123,25 @@ class DataPreprocessor:
         # tokens/entities --> indexes
         doc_words = map(lambda w:w_dict[w], doc_raw)
         qry_words = map(lambda w:w_dict[w], qry_raw)
-        doc_chars = map(lambda w:map(lambda c:c_dict.get(c,c_dict[' ']), 
-            list(w)[:MAX_WORD_LEN]), doc_raw)
-        qry_chars = map(lambda w:map(lambda c:c_dict.get(c,c_dict[' ']), 
-            list(w)[:MAX_WORD_LEN]), qry_raw)
+        if use_chars:
+            doc_chars = map(lambda w:map(lambda c:c_dict.get(c,c_dict[' ']), 
+                list(w)[:MAX_WORD_LEN]), doc_raw)
+            qry_chars = map(lambda w:map(lambda c:c_dict.get(c,c_dict[' ']), 
+                list(w)[:MAX_WORD_LEN]), qry_raw)
+        else:
+            doc_chars, qry_chars = [], []
         ans = map(lambda w:w_dict.get(w,0), ans_raw.split())
         cand = [map(lambda w:w_dict.get(w,0), c) for c in cand_raw]
 
         return doc_words, qry_words, ans, cand, doc_chars, qry_chars
 
-    def parse_all_files(self, directory, dictionary):
+    def parse_all_files(self, directory, dictionary, use_chars):
         """
         parse all files under the given directory into a list of questions,
         where each element is in the form of (document, query, answer, filename)
         """
         all_files = glob.glob(directory + '/*.question')
-        questions = [self.parse_one_file(f, dictionary) + (f,) for f in all_files]
+        questions = [self.parse_one_file(f, dictionary, use_chars) + (f,) for f in all_files]
         return questions
 
     def gen_text_for_word2vec(self, question_dir, text_file):

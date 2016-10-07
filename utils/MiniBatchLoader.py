@@ -11,7 +11,7 @@ class MiniBatchLoader():
         self.bins = self.build_bins(questions)
         self.max_qry_len = max(map(lambda x:len(x[1]), questions))
         self.max_num_cand = max(map(lambda x:len(x[3]), questions))
-        self.max_word_len = max(map(lambda x:max(map(lambda w:len(w), x[4]+x[5])), questions))
+        self.max_word_len = MAX_WORD_LEN
         self.questions = questions
         self.shuffle = shuffle
 	self.reset()
