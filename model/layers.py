@@ -2,11 +2,49 @@ import theano
 import theano.tensor as T
 import lasagne
 import lasagne.layers as L
+import numpy as np
 
 def theano_logsumexp(x, axis=None):
     xmax = x.max(axis=axis, keepdims=True)
     xmax_ = x.max(axis=axis)
     return xmax_ + T.log(T.exp(x - xmax).sum(axis=axis))
+
+class BilinearAttentionLayer(L.MergeLayer):
+    """
+    Layer which implements the bilinear attention described in Stanfor AR (Chen, 2016).
+    Takes a 3D tensor P and a 2D tensor Q as input, outputs  a 2D tensor which is Ps 
+    weighted average along the second dimension, and weights are q_i^T W p_i attention 
+    vectors for each element in batch of P and Q. 
+    If mask_input is provided it will be applied to the output attention vectors before
+    averaging. Mask input should be theano variable and not lasagne layer.
+    """
+
+    def __init__(self, incomings, num_units, W=lasagne.init.Uniform(), 
+            mask_input=None, **kwargs):
+        super(BilinearAttentionLayer, self).__init__(incomings, **kwargs)
+        self.num_units = num_units
+        if mask_input is not None and type(mask_input).__name__!='TensorVariable': 
+            raise TypeError('Mask input must be theano tensor variable')
+        self.mask = mask_input
+        self.W = self.add_param(W, (num_units, num_units), name='W')
+
+    def get_output_shape_for(self, input_shapes):
+        return (input_shapes[0][0], input_shapes[0][2])
+
+    def get_output_for(self, inputs, **kwargs):
+
+        # inputs[0]: # B x N x H
+        # inputs[1]: # B x H
+        # self.W: H x H
+        # self.mask: # B x N
+
+        qW = T.dot(inputs[1], self.W) # B x H
+        qWp = (inputs[0]*qW[:,np.newaxis,:]).sum(axis=2)
+        alphas = T.nnet.softmax(qWp)
+        if self.mask is not None:
+            alphas = alphas*self.mask
+            alphas = alphas/alphas.sum(axis=1)[:,np.newaxis]
+        return (inputs[0]*alphas[:,:,np.newaxis]).sum(axis=1)
 
 class IndexLayer(L.MergeLayer):
     """

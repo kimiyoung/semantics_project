@@ -7,7 +7,7 @@ import numpy as np
 # parse arguments
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--model', dest='model', type=str, default='GAReaderpp_prior',
-        help='base model - (GAReader || GAReaderpp_prior)')
+        help='base model - (GAReader || GAReaderpp_prior || StanfordAR)')
 parser.add_argument('--mode', dest='mode', type=int, default=0,
         help='run mode - (0-train+test, 1-train only, 2-test only)')
 parser.add_argument('--regularizer', dest='regularizer', type=str, default='l2',
@@ -32,6 +32,8 @@ parser.add_argument('--subsample', dest='subsample', type=int, default=-1,
         help='Sample window size around candidates. (-1-no sampling)')
 parser.add_argument('--seed', dest='seed', type=int, default=1,
         help='Seed for different experiments with same settings')
+parser.add_argument('--use_feat', dest='use_feat', type=int, default=1,
+        help='Use token_in_query feature - (0-no, 1-yes)')
 args = parser.parse_args()
 params=vars(args)
 
@@ -44,7 +46,7 @@ save_path = ('experiments/'+params['model']+'/'+params['dataset'].split('/')[0]+
         '%.3f'%params['lambda']+'_nhid%d'%params['nhidden']+'_nlayers%d'%params['nlayers']+
         '_dropout%.1f'%params['dropout']+'_%s'%w2v_filename+'_chardim%d'%params['char_dim']+
         '_train%d'%params['train_emb']+'_subsample%d'%params['subsample']+
-        '_seed%d'%params['seed']+'/')
+        '_seed%d'%params['seed']+'_use-feat%d'%params['use_feat']+'/')
 if not os.path.exists(save_path): os.makedirs(save_path)
 
 # train

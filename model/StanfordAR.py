@@ -6,7 +6,7 @@ import numpy as np
 import cPickle as pickle
 from config import *
 from tools import sub_sample
-from layers import IndexLayer
+from layers import IndexLayer, BilinearAttentionLayer
 
 def prepare_input(d,q):
     f = np.zeros(d.shape[:2]).astype('int8')
@@ -138,68 +138,48 @@ class Model:
             l_doce = L.ConcatLayer([l_doce, l_docchar_embed], axis=2)
             l_qembed = L.ConcatLayer([l_qembed, l_qchar_embed], axis=2)
 
+        l_qembed = L.DropoutLayer(l_qembed, p=self.dropout)
+        l_doce = L.DropoutLayer(l_doce, p=self.dropout)
+
         l_fwd_q = L.GRULayer(l_qembed, self.nhidden, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
                 gradient_steps=GRAD_STEPS, precompute_input=True, only_return_final=True)
         l_bkd_q = L.GRULayer(l_qembed, self.nhidden, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
                 gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True, 
                 only_return_final=True)
-
         l_q = L.ConcatLayer([l_fwd_q, l_bkd_q]) # B x 2D
-        q = L.get_output(l_q) # B x 2D
-
-        l_qs = [l_q]
-        for i in range(K-1):
-            l_fwd_doc_1 = L.GRULayer(l_doce, self.nhidden, grad_clipping=GRAD_CLIP, 
-                    mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True)
-            l_bkd_doc_1 = L.GRULayer(l_doce, self.nhidden, grad_clipping=GRAD_CLIP, 
-                    mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True, \
-                            backwards=True)
-
-            l_doc_1 = L.concat([l_fwd_doc_1, l_bkd_doc_1], axis=2) # B x N x DE
-
-            l_fwd_q_1 = L.GRULayer(l_qembed, self.nhidden, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
-                    gradient_steps=GRAD_STEPS, precompute_input=True)
-            l_bkd_q_1 = L.GRULayer(l_qembed, self.nhidden, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
-                    gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
-
-            l_q_c_1 = L.ConcatLayer([l_fwd_q_1, l_bkd_q_1], axis=2) # B x Q x DE
-            l_qs.append(l_q_c_1)
-
-            qd = L.get_output(l_q_c_1) # B x Q x DE
-            dd = L.get_output(l_doc_1) # B x N x DE
-            M = T.batched_dot(dd, qd.dimshuffle((0,2,1))) # B x N x Q
-            alphas = T.nnet.softmax(T.reshape(M, (M.shape[0]*M.shape[1],M.shape[2])))
-            alphas_r = T.reshape(alphas, (M.shape[0],M.shape[1],M.shape[2]))* \
-                    self.inps[7][:,np.newaxis,:] # B x N x Q
-            alphas_r = alphas_r/alphas_r.sum(axis=2)[:,:,np.newaxis] # B x N x Q
-            q_rep = T.batched_dot(alphas_r, qd) # B x N x DE
-
-            l_q_rep_in = L.InputLayer(shape=(None,None,2*self.nhidden), input_var=q_rep)
-            l_doc_2_in = L.ElemwiseMergeLayer([l_doc_1, l_q_rep_in], T.mul)
-            l_doce = L.dropout(l_doc_2_in, p=self.dropout) # B x N x DE
 
         if self.use_feat: l_doce = L.ConcatLayer([l_doce, l_fembed], axis=2) # B x N x DE+2
-        l_fwd_doc = L.GRULayer(l_doce, self.nhidden, grad_clipping=GRAD_CLIP, 
+        l_fwd_doc_1 = L.GRULayer(l_doce, self.nhidden, grad_clipping=GRAD_CLIP, 
                 mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True)
-        l_bkd_doc = L.GRULayer(l_doce, self.nhidden, grad_clipping=GRAD_CLIP, 
+        l_bkd_doc_1 = L.GRULayer(l_doce, self.nhidden, grad_clipping=GRAD_CLIP, 
                 mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True, \
                         backwards=True)
+        l_doc_1 = L.concat([l_fwd_doc_1, l_bkd_doc_1], axis=2) # B x N x 2D
 
-        l_doc = L.concat([l_fwd_doc, l_bkd_doc], axis=2)
+        l_o = BilinearAttentionLayer([l_doc_1, l_q], 
+                2*self.nhidden, 
+                mask_input=self.inps[6]) # B x 2D
+        #odim = self.embed_dim
+        #if self.use_chars: odim += self.embed_dim/2
+        #if self.use_feat: odim += 2
+        #l_od = L.DenseLayer(l_o, odim)
+        l_od = l_o
 
-        d = L.get_output(l_doc) # B x N x 2D
-        p = T.batched_dot(d,q) # B x N
+        oo = L.get_output(l_od) # B x OD
+        d = L.get_output(l_doc_1) # B x N x OD
+        p = T.batched_dot(d,oo) # B x N
         pm = T.nnet.softmax(p)*self.inps[10]
         pm = pm/pm.sum(axis=1)[:,np.newaxis]
         final = T.batched_dot(pm, self.inps[4])
 
-        dv = L.get_output(l_doc, deterministic=True) # B x N x 2D
-        p = T.batched_dot(dv,q) # B x N
+        ov = L.get_output(l_od, deterministic=True)
+        dv = L.get_output(l_doc_1, deterministic=True) # B x N x OD
+        p = T.batched_dot(dv,ov) # B x N
         pm = T.nnet.softmax(p)*self.inps[10]
         pm = pm/pm.sum(axis=1)[:,np.newaxis]
         final_v = T.batched_dot(pm, self.inps[4])
 
-        return final, final_v, l_doc, l_qs, l_docembed.W
+        return final, final_v, l_od, [], l_docembed.W
 
     def load_model(self, load_path):
         with open(load_path, 'r') as f:
