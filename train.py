@@ -55,10 +55,9 @@ def main(save_path, params):
         print('loading init model')
         m.load_model('%s/model_init.p'%save_path)
 
-    epoch_count = 0
-    prev_acc = 0.
     for epoch in xrange(NUM_EPOCHS):
         estart = time.time()
+        new_max = False
 
         for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, fnames in batch_loader_train:
             loss, tr_acc, probs = m.train(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c)
@@ -84,6 +83,7 @@ def main(save_path, params):
                 if val_acc > max_acc:
                     max_acc = val_acc
                     m.save_model('%s/best_model.p'%save_path)
+                    new_max = True
                 message = "Epoch %d VAL loss=%.4e acc=%.4f max_acc=%.4f" % (
                     epoch, total_loss/n, val_acc, max_acc)
                 print message
@@ -93,14 +93,12 @@ def main(save_path, params):
         message = "After Epoch %d: Train acc=%.4f, Val acc=%.4f" % (epoch, tr_acc, val_acc)
         print message
         logger.write(message+'\n')
-
-        # stopping criterion / learning schedule
-        if val_acc<prev_acc:
-            epoch_count += 1
-            if epoch_count==2: break
-            m.anneal()
-        else:
-            epoch_count = 0
-            prev_acc = val_acc
         
+        # learning schedule
+        if epoch >=2:
+            m.anneal()
+        # stopping criterion
+        if not new_max:
+            break
+
     logger.close()
