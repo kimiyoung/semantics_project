@@ -75,7 +75,8 @@ class Model:
         updates = lasagne.updates.adam(self.loss_fn, self.params, learning_rate=self.learning_rate)
         self.train_fn = theano.function(self.inps, \
                 [self.loss_fn, self.eval_fn, self.predicted_probs], 
-                updates=updates)
+                updates=updates,
+                on_unused_input='warn')
 
     def train(self, dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c):
         f = prepare_input(dw,qw)
