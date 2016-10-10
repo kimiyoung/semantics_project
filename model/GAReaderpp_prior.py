@@ -9,7 +9,7 @@ from tools import sub_sample
 from layers import IndexLayer
 
 def prepare_input(d,q):
-    f = np.zeros(d.shape[:2]).astype('int8')
+    f = np.zeros(d.shape[:2]).astype('int32')
     for i in range(d.shape[0]):
         f[i,:] = np.in1d(d[i,:,0],q[i,:,0])
     return f
@@ -37,7 +37,7 @@ class Model:
         docmask_var, qmask_var, candmask_var = T.bmatrix('doc_mask'), T.bmatrix('q_mask'), \
                 T.bmatrix('c_mask')
         target_var = T.ivector('ans')
-        feat_var = T.bmatrix('feat')
+        feat_var = T.imatrix('feat')
         doc_toks, qry_toks= T.imatrix('dchars'), T.imatrix('qchars')
         tok_var, tok_mask = T.imatrix('tok'), T.bmatrix('tok_mask')
         self.inps = [doc_var, doc_toks, query_var, qry_toks, cand_var, target_var, docmask_var,
