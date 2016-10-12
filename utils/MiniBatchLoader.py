@@ -74,6 +74,7 @@ class MiniBatchLoader():
         qw = np.zeros((curr_batch_size, self.max_qry_len, 1), dtype='int32') # query words
         c = np.zeros((curr_batch_size, curr_max_doc_len, self.max_num_cand), 
                 dtype='int16')   # candidate answers
+        cl = np.zeros((curr_batch_size,), dtype='int32') # position of cloze in query
 
         m_dw = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32')  # document word mask
         m_qw = np.zeros((curr_batch_size, self.max_qry_len), dtype='int32')  # query word mask
@@ -86,7 +87,7 @@ class MiniBatchLoader():
 
         for n, ix in enumerate(ixs):
 
-            doc_w, qry_w, ans, cand, doc_c, qry_c, fname = self.questions[ix]
+            doc_w, qry_w, ans, cand, doc_c, qry_c, cloze, fname = self.questions[ix]
 
             # document, query and candidates
             dw[n,:len(doc_w),0] = np.array(doc_w)
@@ -111,6 +112,7 @@ class MiniBatchLoader():
                 c[n,index,it] = 1
                 if ans==cc: a[n] = it # answer
 
+            cl[n] = cloze
             fnames[n] = fname
 
         # create type character matrix and indices for doc, qry
@@ -129,7 +131,7 @@ class MiniBatchLoader():
 
         self.ptr += 1
 
-        return dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, fnames
+        return dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, fnames
 
 def unit_test(mini_batch_loader):
     """unit test to validate MiniBatchLoader using max-frequency (exclusive).

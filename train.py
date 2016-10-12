@@ -4,7 +4,7 @@ import os
 import shutil
 
 from config import *
-from model import GAReader, GAReaderpp_prior, StanfordAR
+from model import GAReader, GAReaderpp_prior, StanfordAR, GAReaderpp
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 def main(save_path, params):
@@ -59,8 +59,8 @@ def main(save_path, params):
         estart = time.time()
         new_max = False
 
-        for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, fnames in batch_loader_train:
-            loss, tr_acc, probs = m.train(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c)
+        for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, fnames in batch_loader_train:
+            loss, tr_acc, probs = m.train(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl)
 
             message = "Epoch %d TRAIN loss=%.4e acc=%.4f elapsed=%.1f" % (
                     epoch, loss, tr_acc, time.time()-estart)
@@ -71,8 +71,10 @@ def main(save_path, params):
             if num_iter % VALIDATION_FREQ == 0:
                 total_loss, total_acc, n, n_cand = 0., 0., 0, 0.
 
-                for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, fnames in batch_loader_val:
-                    loss, acc, probs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c)
+                for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, fnames in batch_loader_val:
+                    outs = m.validate(dw, dt, qw, qt, c, a, 
+                            m_dw, m_qw, tt, tm, m_c, cl)
+                    loss, acc, probs = outs[:3]
 
                     bsize = dw.shape[0]
                     total_loss += bsize*loss

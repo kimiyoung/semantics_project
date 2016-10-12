@@ -119,6 +119,13 @@ class DataPreprocessor:
         # wrap the query with special symbols
         qry_raw.insert(0, SYMB_BEGIN)
         qry_raw.append(SYMB_END)
+        try:
+            cloze = qry_raw.index('@placeholder')
+        except ValueError:
+            print '@placeholder not found in ', fname, '. Fixing...'
+            at = qry_raw.index('@')
+            qry_raw = qry_raw[:at] + [''.join(qry_raw[at:at+2])] + qry_raw[at+2:]
+            cloze = qry_raw.index('@placeholder')
 
         # tokens/entities --> indexes
         doc_words = map(lambda w:w_dict[w], doc_raw)
@@ -133,7 +140,7 @@ class DataPreprocessor:
         ans = map(lambda w:w_dict.get(w,0), ans_raw.split())
         cand = [map(lambda w:w_dict.get(w,0), c) for c in cand_raw]
 
-        return doc_words, qry_words, ans, cand, doc_chars, qry_chars
+        return doc_words, qry_words, ans, cand, doc_chars, qry_chars, cloze
 
     def parse_all_files(self, directory, dictionary, use_chars):
         """

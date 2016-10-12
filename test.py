@@ -1,11 +1,12 @@
 import numpy as np
+import cPickle as pkl
 import shutil
 
 from config import *
-from model import GAReader, GAReaderpp_prior, StanfordAR
+from model import GAReader, GAReaderpp_prior, StanfordAR, GAReaderpp
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
-def main(load_path, params):
+def main(load_path, params, mode='test'):
 
     regularizer = params['regularizer']
     rlambda = params['lambda']
@@ -28,7 +29,10 @@ def main(load_path, params):
     inv_vocab = data.inv_dictionary
 
     print("building minibatch loaders ...")
-    batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.test, BATCH_SIZE)
+    if mode=='test':
+        batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.test, BATCH_SIZE)
+    else:
+        batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.validation, BATCH_SIZE)
 
     print("building network ...")
     W_init, embed_dim = Helpers.load_word2vec_embeddings(data.dictionary[0], word2vec)
@@ -40,10 +44,12 @@ def main(load_path, params):
     print("testing ...")
     pr = np.zeros((len(batch_loader_test.questions),
         batch_loader_test.max_num_cand)).astype('float32')
-    fids = []
+    fids, attns = [], []
     total_loss, total_acc, n = 0., 0., 0
-    for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, fnames in batch_loader_test:
-        loss, acc, probs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c)
+    for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, fnames in batch_loader_test:
+        outs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl)
+        loss, acc, probs = outs[:3]
+        attns += [[fnames[0]] + [o[0,:,:] for o in outs[3:]]] # store one attention
 
         bsize = dw.shape[0]
         total_loss += bsize*loss
@@ -54,12 +60,13 @@ def main(load_path, params):
         n += bsize
 
     logger = open(load_path+'/log','a',0)
-    message = 'TEST Loss %.4e acc=%.4f' % (total_loss/n, total_acc/n)
+    message = '%s Loss %.4e acc=%.4f' % (mode.upper(), total_loss/n, total_acc/n)
     print message
     logger.write(message+'\n')
     logger.close()
 
-    np.save('%s/test.probs'%load_path,np.asarray(pr))
-    f = open('%s/test.ids'%load_path,'w')
+    np.save('%s/%s.probs' % (load_path,mode),np.asarray(pr))
+    pkl.dump(attns, open('%s/%s.attns' % (load_path,mode),'w'))
+    f = open('%s/%s.ids' % (load_path,mode),'w')
     for item in fids: f.write(item+'\n')
     f.close()
