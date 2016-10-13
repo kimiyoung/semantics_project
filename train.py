@@ -5,6 +5,7 @@ import shutil
 
 from config import *
 from model import GAReader, GAReaderpp_prior, StanfordAR, GAReaderpp
+from model import DeepASReader, DeepAoAReader
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 def main(save_path, params):
