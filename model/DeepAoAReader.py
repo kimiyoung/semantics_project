@@ -148,7 +148,6 @@ class Model:
 
         l_q = L.ConcatLayer([l_fwd_q, l_bkd_q], axis=2) # B x Q x 2D
         q = L.get_output(l_q) # B x Q x 2D
-        q = q[T.arange(q.shape[0]),self.inps[12],:] # B x 2D
 
         l_qs = [l_q]
         attentions = []
