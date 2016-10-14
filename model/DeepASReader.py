@@ -46,7 +46,7 @@ class Model:
 
         if rlambda> 0.: W_pert = W_init + lasagne.init.GlorotNormal().sample(W_init.shape)
         else: W_pert = W_init
-        self.predicted_probs, predicted_probs_val, self.doc_net, self.q_net, W_emb = (
+        self.predicted_probs, predicted_probs_val, self.doc_net, self.q_net, W_emb, attentions = (
                 self.build_network(K, vocab_size, W_pert))
 
         self.loss_fn = T.nnet.categorical_crossentropy(self.predicted_probs, target_var).mean() + \
@@ -68,7 +68,7 @@ class Model:
                 updates=updates,
                 on_unused_input='warn')
         self.validate_fn = theano.function(self.inps, 
-                [loss_fn_val, eval_fn_val, predicted_probs_val],
+                [loss_fn_val, eval_fn_val, predicted_probs_val]+attentions,
                 on_unused_input='warn')
 
     def anneal(self):
@@ -146,11 +146,12 @@ class Model:
                 gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True, 
                 only_return_final=False)
 
-        l_q = L.ConcatLayer([l_fwd_q, l_bkd_q]) # B x Q x 2D
+        l_q = L.ConcatLayer([l_fwd_q, l_bkd_q], axis=2) # B x Q x 2D
         q = L.get_output(l_q) # B x Q x 2D
         q = q[T.arange(q.shape[0]),self.inps[12],:] # B x 2D
 
         l_qs = [l_q]
+        attentions = []
         for i in range(K-1):
             l_fwd_doc_1 = L.GRULayer(l_doce, self.nhidden, grad_clipping=GRAD_CLIP, 
                     mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True)
@@ -160,26 +161,7 @@ class Model:
 
             l_doc_1 = L.concat([l_fwd_doc_1, l_bkd_doc_1], axis=2) # B x N x DE
 
-            l_fwd_q_1 = L.GRULayer(l_qembed, self.nhidden, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
-                    gradient_steps=GRAD_STEPS, precompute_input=True)
-            l_bkd_q_1 = L.GRULayer(l_qembed, self.nhidden, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
-                    gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
-
-            l_q_c_1 = L.ConcatLayer([l_fwd_q_1, l_bkd_q_1], axis=2) # B x Q x DE
-            l_qs.append(l_q_c_1)
-
-            qd = L.get_output(l_q_c_1) # B x Q x DE
-            dd = L.get_output(l_doc_1) # B x N x DE
-            M = T.batched_dot(dd, qd.dimshuffle((0,2,1))) # B x N x Q
-            alphas = T.nnet.softmax(T.reshape(M, (M.shape[0]*M.shape[1],M.shape[2])))
-            alphas_r = T.reshape(alphas, (M.shape[0],M.shape[1],M.shape[2]))* \
-                    self.inps[7][:,np.newaxis,:] # B x N x Q
-            alphas_r = alphas_r/alphas_r.sum(axis=2)[:,:,np.newaxis] # B x N x Q
-            q_rep = T.batched_dot(alphas_r, qd) # B x N x DE
-
-            l_q_rep_in = L.InputLayer(shape=(None,None,2*self.nhidden), input_var=q_rep)
-            l_doc_2_in = L.ElemwiseMergeLayer([l_doc_1, l_q_rep_in], T.mul)
-            l_doce = L.dropout(l_doc_2_in, p=self.dropout) # B x N x DE
+            l_doce = L.dropout(l_doc_1, p=self.dropout) # B x N x DE
 
         if self.use_feat: l_doce = L.ConcatLayer([l_doce, l_fembed], axis=2) # B x N x DE+2
         l_fwd_doc = L.GRULayer(l_doce, self.nhidden, grad_clipping=GRAD_CLIP, 
@@ -202,7 +184,7 @@ class Model:
         pm = pm/pm.sum(axis=1)[:,np.newaxis]
         final_v = T.batched_dot(pm, self.inps[4])
 
-        return final, final_v, l_doc, l_qs, l_docembed.W
+        return final, final_v, l_doc, l_qs, l_docembed.W, attentions
 
     def load_model(self, load_path):
         with open(load_path, 'r') as f:

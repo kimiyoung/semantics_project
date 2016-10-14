@@ -6,17 +6,17 @@ import numpy as np
 
 # parse arguments
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--model', dest='model', type=str, default='GAReaderpp_prior',
-        help='base model - (GAReader || GAReaderpp_prior || StanfordAR)')
+parser.add_argument('--model', dest='model', type=str, default='GAReaderpp',
+        help='base model - (GAReader || GAReaderpp || StanfordAR || DeepASReader)')
 parser.add_argument('--mode', dest='mode', type=int, default=0,
-        help='run mode - (0-train+test, 1-train only, 2-test only)')
+        help='run mode - (0-train+test, 1-train only, 2-test only, 3-val only)')
 parser.add_argument('--regularizer', dest='regularizer', type=str, default='l2',
         help='l2 or l1 norm for regularizing word embeddings')
 parser.add_argument('--lambda', dest='lambda', type=float, default=0.,
         help='weight of regularization')
-parser.add_argument('--nhidden', dest='nhidden', type=int, default=256,
+parser.add_argument('--nhidden', dest='nhidden', type=int, default=128,
         help='GRU hidden state size')
-parser.add_argument('--char_dim', dest='char_dim', type=int, default=50,
+parser.add_argument('--char_dim', dest='char_dim', type=int, default=25,
         help='Size of char embeddings (0 to turn off). Char GRU hidden size = 2*char_dim.')
 parser.add_argument('--nlayers', dest='nlayers', type=int, default=2,
         help='Number of reader layers')
@@ -32,7 +32,7 @@ parser.add_argument('--subsample', dest='subsample', type=int, default=-1,
         help='Sample window size around candidates. (-1-no sampling)')
 parser.add_argument('--seed', dest='seed', type=int, default=1,
         help='Seed for different experiments with same settings')
-parser.add_argument('--use_feat', dest='use_feat', type=int, default=1,
+parser.add_argument('--use_feat', dest='use_feat', type=int, default=0,
         help='Use token_in_query feature - (0-no, 1-yes)')
 args = parser.parse_args()
 params=vars(args)
@@ -54,5 +54,7 @@ if params['mode']<2:
     train.main(save_path, params)
 
 # test
-if params['mode']!=1:
+if params['mode']==0 or params['mode']==2:
     test.main(save_path, params)
+elif params['mode']==3:
+    test.main(save_path, params, mode='validation')

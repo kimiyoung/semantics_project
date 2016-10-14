@@ -4,7 +4,8 @@ import os
 import shutil
 
 from config import *
-from model import GAReader, GAReaderpp_prior, StanfordAR
+from model import GAReader, GAReaderpp_prior, StanfordAR, GAReaderpp
+from model import DeepASReader, DeepAoAReader
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 def main(save_path, params):
@@ -55,13 +56,12 @@ def main(save_path, params):
         print('loading init model')
         m.load_model('%s/model_init.p'%save_path)
 
-    epoch_count = 0
-    prev_acc = 0.
     for epoch in xrange(NUM_EPOCHS):
         estart = time.time()
+        new_max = False
 
-        for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, fnames in batch_loader_train:
-            loss, tr_acc, probs = m.train(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c)
+        for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, fnames in batch_loader_train:
+            loss, tr_acc, probs = m.train(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl)
 
             message = "Epoch %d TRAIN loss=%.4e acc=%.4f elapsed=%.1f" % (
                     epoch, loss, tr_acc, time.time()-estart)
@@ -72,8 +72,10 @@ def main(save_path, params):
             if num_iter % VALIDATION_FREQ == 0:
                 total_loss, total_acc, n, n_cand = 0., 0., 0, 0.
 
-                for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, fnames in batch_loader_val:
-                    loss, acc, probs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c)
+                for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, fnames in batch_loader_val:
+                    outs = m.validate(dw, dt, qw, qt, c, a, 
+                            m_dw, m_qw, tt, tm, m_c, cl)
+                    loss, acc, probs = outs[:3]
 
                     bsize = dw.shape[0]
                     total_loss += bsize*loss
@@ -84,6 +86,7 @@ def main(save_path, params):
                 if val_acc > max_acc:
                     max_acc = val_acc
                     m.save_model('%s/best_model.p'%save_path)
+                    new_max = True
                 message = "Epoch %d VAL loss=%.4e acc=%.4f max_acc=%.4f" % (
                     epoch, total_loss/n, val_acc, max_acc)
                 print message
@@ -93,14 +96,12 @@ def main(save_path, params):
         message = "After Epoch %d: Train acc=%.4f, Val acc=%.4f" % (epoch, tr_acc, val_acc)
         print message
         logger.write(message+'\n')
-
-        # stopping criterion / learning schedule
-        if val_acc<prev_acc:
-            epoch_count += 1
-            if epoch_count==2: break
-            m.anneal()
-        else:
-            epoch_count = 0
-            prev_acc = val_acc
         
+        # learning schedule
+        if epoch >=2:
+            m.anneal()
+        # stopping criterion
+        if not new_max:
+            break
+
     logger.close()
