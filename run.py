@@ -3,6 +3,7 @@ import test
 import argparse
 import os
 import numpy as np
+import random
 
 # parse arguments
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -38,6 +39,7 @@ args = parser.parse_args()
 params=vars(args)
 
 np.random.seed(params['seed'])
+random.seed(params['seed'])
 
 # save directory
 w2v_filename = params['word2vec'].split('/')[-1].split('.')[0] if params['word2vec'] else 'None'

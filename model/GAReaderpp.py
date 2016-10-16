@@ -6,7 +6,7 @@ import numpy as np
 import cPickle as pickle
 from config import *
 from tools import sub_sample
-from layers import IndexLayer
+from layers import *
 
 def prepare_input(d,q):
     f = np.zeros(d.shape[:2]).astype('int32')
@@ -17,7 +17,8 @@ def prepare_input(d,q):
 class Model:
 
     def __init__(self, K, vocab_size, num_chars, W_init, regularizer, rlambda, 
-            nhidden, embed_dim, dropout, train_emb, subsample, char_dim, use_feat):
+            nhidden, embed_dim, dropout, train_emb, subsample, char_dim, use_feat,
+            save_attn=False):
         self.nhidden = nhidden
         self.embed_dim = embed_dim
         self.dropout = dropout
@@ -27,6 +28,7 @@ class Model:
         self.learning_rate = LEARNING_RATE
         self.num_chars = num_chars
         self.use_feat = use_feat
+        self.save_attn = save_attn
 
         norm = lasagne.regularization.l2 if regularizer=='l2' else lasagne.regularization.l1
         self.use_chars = self.char_dim!=0
@@ -46,7 +48,7 @@ class Model:
 
         if rlambda> 0.: W_pert = W_init + lasagne.init.GlorotNormal().sample(W_init.shape)
         else: W_pert = W_init
-        self.predicted_probs, predicted_probs_val, self.doc_net, self.q_net, W_emb, attentions = (
+        self.predicted_probs, predicted_probs_val, self.network, W_emb, attentions = (
                 self.build_network(K, vocab_size, W_pert))
 
         self.loss_fn = T.nnet.categorical_crossentropy(self.predicted_probs, target_var).mean() + \
@@ -59,7 +61,7 @@ class Model:
         eval_fn_val = lasagne.objectives.categorical_accuracy(predicted_probs_val, 
                 target_var).mean()
 
-        self.params = L.get_all_params([self.doc_net]+self.q_net, trainable=True)
+        self.params = L.get_all_params(self.network, trainable=True)
         
         updates = lasagne.updates.adam(self.loss_fn, self.params, learning_rate=self.learning_rate)
 
@@ -140,18 +142,11 @@ class Model:
             l_doce = L.ConcatLayer([l_doce, l_docchar_embed], axis=2)
             l_qembed = L.ConcatLayer([l_qembed, l_qchar_embed], axis=2)
 
-        l_fwd_q = L.GRULayer(l_qembed, self.nhidden, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
-                gradient_steps=GRAD_STEPS, precompute_input=True, only_return_final=False)
-        l_bkd_q = L.GRULayer(l_qembed, self.nhidden, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
-                gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True, 
-                only_return_final=False)
-
-        l_q = L.ConcatLayer([l_fwd_q, l_bkd_q], axis=2) # B x Q x 2D
-        q = L.get_output(l_q) # B x Q x 2D
-        q = q[T.arange(q.shape[0]),self.inps[12],:] # B x 2D
-
-        l_qs = [l_q]
         attentions = []
+        if self.save_attn:
+            l_m = PairwiseInteractionLayer([l_doce,l_qembed])
+            attentions.append(L.get_output(l_m, deterministic=True))
+
         for i in range(K-1):
             l_fwd_doc_1 = L.GRULayer(l_doce, self.nhidden, grad_clipping=GRAD_CLIP, 
                     mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True)
@@ -169,52 +164,49 @@ class Model:
                     gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
 
             l_q_c_1 = L.ConcatLayer([l_fwd_q_1, l_bkd_q_1], axis=2) # B x Q x DE
-            l_qs.append(l_q_c_1)
 
-            qd = L.get_output(l_q_c_1) # B x Q x DE
-            dd = L.get_output(l_doc_1) # B x N x DE
-            M = T.batched_dot(dd, qd.dimshuffle((0,2,1))) # B x N x Q
-            alphas = T.nnet.softmax(T.reshape(M, (M.shape[0]*M.shape[1],M.shape[2])))
-            alphas_r = T.reshape(alphas, (M.shape[0],M.shape[1],M.shape[2]))* \
-                    self.inps[7][:,np.newaxis,:] # B x N x Q
-            alphas_r = alphas_r/alphas_r.sum(axis=2)[:,:,np.newaxis] # B x N x Q
-            attentions.append(alphas_r)
-            q_rep = T.batched_dot(alphas_r, qd) # B x N x DE
-
-            l_q_rep_in = L.InputLayer(shape=(None,None,2*self.nhidden), input_var=q_rep)
-            l_doc_2_in = L.ElemwiseMergeLayer([l_doc_1, l_q_rep_in], T.mul)
+            l_m = PairwiseInteractionLayer([l_doc_1, l_q_c_1])
+            l_doc_2_in = GatedAttentionLayer([l_doc_1, l_q_c_1, l_m], 
+                    mask_input=self.inps[7])
             l_doce = L.dropout(l_doc_2_in, p=self.dropout) # B x N x DE
+            if self.save_attn: 
+                attentions.append(L.get_output(l_m, deterministic=True))
 
         if self.use_feat: l_doce = L.ConcatLayer([l_doce, l_fembed], axis=2) # B x N x DE+2
+
+        # final layer
         l_fwd_doc = L.GRULayer(l_doce, self.nhidden, grad_clipping=GRAD_CLIP, 
                 mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True)
         l_bkd_doc = L.GRULayer(l_doce, self.nhidden, grad_clipping=GRAD_CLIP, 
                 mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True, \
                         backwards=True)
-
         l_doc = L.concat([l_fwd_doc, l_bkd_doc], axis=2)
 
-        d = L.get_output(l_doc) # B x N x 2D
-        p = T.batched_dot(d,q) # B x N
-        pm = T.nnet.softmax(p)*self.inps[10]
-        pm = pm/pm.sum(axis=1)[:,np.newaxis]
-        final = T.batched_dot(pm, self.inps[4])
+        l_fwd_q = L.GRULayer(l_qembed, self.nhidden, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
+                gradient_steps=GRAD_STEPS, precompute_input=True, only_return_final=False)
+        l_bkd_q = L.GRULayer(l_qembed, self.nhidden, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
+                gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True, 
+                only_return_final=False)
+        l_q = L.ConcatLayer([l_fwd_q, l_bkd_q], axis=2) # B x Q x 2D
 
-        dv = L.get_output(l_doc, deterministic=True) # B x N x 2D
-        p = T.batched_dot(dv,q) # B x N
-        pm = T.nnet.softmax(p)*self.inps[10]
-        pm = pm/pm.sum(axis=1)[:,np.newaxis]
-        final_v = T.batched_dot(pm, self.inps[4])
+        if self.save_attn:
+            l_m = PairwiseInteractionLayer([l_doc, l_q])
+            attentions.append(L.get_output(l_m, deterministic=True))
 
-        return final, final_v, l_doc, l_qs, l_docembed.W, attentions
+        l_prob = AttentionSumLayer([l_doc,l_q], self.inps[4], self.inps[12], 
+                mask_input=self.inps[10])
+        final = L.get_output(l_prob)
+        final_v = L.get_output(l_prob, deterministic=True)
+
+        return final, final_v, l_prob, l_docembed.W, attentions
 
     def load_model(self, load_path):
         with open(load_path, 'r') as f:
             data = pickle.load(f)
-        L.set_all_param_values([self.doc_net]+self.q_net, data)
+        L.set_all_param_values(self.network, data)
 
     def save_model(self, save_path):
-        data = L.get_all_param_values([self.doc_net]+self.q_net)
+        data = L.get_all_param_values(self.network)
         with open(save_path, 'w') as f:
             pickle.dump(data, f)
 
