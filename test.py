@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 import cPickle as pkl
 import shutil
@@ -39,7 +40,7 @@ def main(load_path, params, mode='test'):
     W_init, embed_dim = Helpers.load_word2vec_embeddings(data.dictionary[0], word2vec)
     m = eval(base_model).Model(nlayers, data.vocab_size, data.num_chars, W_init, 
             regularizer, rlambda, nhidden, embed_dim, dropout, train_emb, subsample, 
-            char_dim, use_feat)
+            char_dim, use_feat, save_attn=True)
     m.load_model('%s/best_model.p'%load_path)
 
     print("testing ...")
@@ -50,7 +51,7 @@ def main(load_path, params, mode='test'):
     for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, fnames in batch_loader_test:
         outs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl)
         loss, acc, probs = outs[:3]
-        attns += [[fnames[0]] + [o[0,:,:] for o in outs[3:]]] # store one attention
+        attns += [[fnames[0],probs[0,:]] + [o[0,:,:] for o in outs[3:]]] # store one attention
 
         bsize = dw.shape[0]
         total_loss += bsize*loss
