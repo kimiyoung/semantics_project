@@ -18,12 +18,13 @@ class GatedAttentionLayer(L.MergeLayer):
     The mask is for the second tensor.
     """
 
-    def __init__(self, incomings, gating_fn=T.mul, mask_input=None, **kwargs):
+    def __init__(self, incomings, gating_fn=T.mul, mask_input=None, transpose=False, **kwargs):
         super(GatedAttentionLayer, self).__init__(incomings, **kwargs)
         self.gating_fn = gating_fn
         if mask_input is not None and type(mask_input).__name__!='TensorVariable': 
             raise TypeError('Mask input must be theano tensor variable')
         self.mask = mask_input
+        self.transpose = transpose
 
     def get_output_shape_for(self, input_shapes):
         return input_shapes[0]
@@ -32,10 +33,11 @@ class GatedAttentionLayer(L.MergeLayer):
 
         # inputs[0]: B x N x D
         # inputs[1]: B x Q x D
-        # inputs[2]: B x N x Q
+        # inputs[2]: B x N x Q / B x Q x N
         # self.mask: B x Q
 
-        M = inputs[2]
+        if self.transpose: M = inputs[2].dimshuffle((0,2,1))
+        else: M = inputs[2]
         alphas = T.nnet.softmax(T.reshape(M, (M.shape[0]*M.shape[1],M.shape[2])))
         alphas_r = T.reshape(alphas, (M.shape[0],M.shape[1],M.shape[2]))* \
                 self.mask[:,np.newaxis,:] # B x N x Q
