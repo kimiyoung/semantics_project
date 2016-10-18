@@ -22,6 +22,7 @@ def main(save_path, params):
     base_model = params['model']
     char_dim = params['char_dim']
     use_feat = params['use_feat']
+    train_cut = params['train_cut']
 
     # save settings
     shutil.copyfile('config.py','%s/config.py'%save_path)
@@ -31,7 +32,8 @@ def main(save_path, params):
     data = dp.preprocess(dataset, no_training_set=False, use_chars=use_chars)
 
     print("building minibatch loaders ...")
-    batch_loader_train = MiniBatchLoader.MiniBatchLoader(data.training, BATCH_SIZE)
+    batch_loader_train = MiniBatchLoader.MiniBatchLoader(data.training, BATCH_SIZE, 
+            sample=train_cut)
     batch_loader_val = MiniBatchLoader.MiniBatchLoader(data.validation, BATCH_SIZE)
 
     print("building network ...")
