@@ -17,7 +17,8 @@ def prepare_input(d,q):
 class Model:
 
     def __init__(self, K, vocab_size, num_chars, W_init, regularizer, rlambda, 
-            nhidden, embed_dim, dropout, train_emb, subsample, char_dim, use_feat):
+            nhidden, embed_dim, dropout, train_emb, subsample, char_dim, use_feat,
+            save_attn=False):
         self.nhidden = nhidden
         self.embed_dim = embed_dim
         self.dropout = dropout
@@ -27,6 +28,7 @@ class Model:
         self.learning_rate = LEARNING_RATE
         self.num_chars = num_chars
         self.use_feat = use_feat
+        self.save_attn = save_attn
 
         norm = lasagne.regularization.l2 if regularizer=='l2' else lasagne.regularization.l1
         self.use_chars = self.char_dim!=0
@@ -167,6 +169,10 @@ class Model:
                 gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True, 
                 only_return_final=False)
         l_q = L.ConcatLayer([l_fwd_q, l_bkd_q], axis=2) # B x Q x 2D
+
+        if self.save_attn:
+            l_m = PairwiseInteractionLayer([l_doc, l_q])
+            attentions.append(L.get_output(l_m, deterministic=True))
 
         l_prob = AttentionSumLayer([l_doc,l_q], self.inps[4], self.inps[12], 
                 mask_input=self.inps[10])
