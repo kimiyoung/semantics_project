@@ -9,6 +9,9 @@ def theano_logsumexp(x, axis=None):
     xmax_ = x.max(axis=axis)
     return xmax_ + T.log(T.exp(x - xmax).sum(axis=axis))
 
+def Tconcat(t1,t2):
+    return T.concatenate([t1,t2], axis=2)
+
 class GatedAttentionLayer(L.MergeLayer):
     """
     Layer which gets two 3D tensors as input, and a pairwise matching matrix M between 
@@ -18,9 +21,9 @@ class GatedAttentionLayer(L.MergeLayer):
     The mask is for the second tensor.
     """
 
-    def __init__(self, incomings, gating_fn=T.mul, mask_input=None, transpose=False, **kwargs):
+    def __init__(self, incomings, gating_fn='T.mul', mask_input=None, transpose=False, **kwargs):
         super(GatedAttentionLayer, self).__init__(incomings, **kwargs)
-        self.gating_fn = gating_fn
+        self.gating_fn = eval(gating_fn)
         if mask_input is not None and type(mask_input).__name__!='TensorVariable': 
             raise TypeError('Mask input must be theano tensor variable')
         self.mask = mask_input
