@@ -38,7 +38,7 @@ parser.add_argument('--use_feat', dest='use_feat', type=int, default=0,
 parser.add_argument('--train_cut', dest='train_cut', type=float, default=1.0,
         help='Cut training data size by factor (default - no cut)')
 parser.add_argument('--gating_fn', dest='gating_fn', type=str, default='T.mul',
-        help='Gating function (T.mul || T.sum || Tconcat)')
+        help='Gating function (T.mul || Tsum || Tconcat)')
 args = parser.parse_args()
 params=vars(args)
 
