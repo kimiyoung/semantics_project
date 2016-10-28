@@ -9,6 +9,12 @@ def theano_logsumexp(x, axis=None):
     xmax_ = x.max(axis=axis)
     return xmax_ + T.log(T.exp(x - xmax).sum(axis=axis))
 
+def Tconcat(t1,t2):
+    return T.concatenate([t1,t2], axis=2)
+
+def Tsum(t1,t2):
+    return t1+t2
+
 class GatedAttentionLayer(L.MergeLayer):
     """
     Layer which gets two 3D tensors as input, and a pairwise matching matrix M between 
@@ -18,16 +24,19 @@ class GatedAttentionLayer(L.MergeLayer):
     The mask is for the second tensor.
     """
 
-    def __init__(self, incomings, gating_fn=T.mul, mask_input=None, transpose=False, **kwargs):
+    def __init__(self, incomings, gating_fn='T.mul', mask_input=None, transpose=False, **kwargs):
         super(GatedAttentionLayer, self).__init__(incomings, **kwargs)
-        self.gating_fn = gating_fn
+	self.gating_fn = gating_fn
         if mask_input is not None and type(mask_input).__name__!='TensorVariable': 
             raise TypeError('Mask input must be theano tensor variable')
         self.mask = mask_input
         self.transpose = transpose
 
     def get_output_shape_for(self, input_shapes):
-        return input_shapes[0]
+        if self.gating_fn=='Tconcat': 
+            return (input_shapes[0][0],input_shapes[0][1],input_shapes[0][2]+input_shapes[1][2])
+        else:
+            return input_shapes[0]
 
     def get_output_for(self, inputs, attention_only=False, **kwargs):
 
@@ -44,7 +53,7 @@ class GatedAttentionLayer(L.MergeLayer):
         alphas_r = alphas_r/alphas_r.sum(axis=2)[:,:,np.newaxis] # B x N x Q
         q_rep = T.batched_dot(alphas_r, inputs[1]) # B x N x D
     
-        return self.gating_fn(inputs[0],q_rep)
+        return eval(self.gating_fn)(inputs[0],q_rep)
 
 class PairwiseInteractionLayer(L.MergeLayer):
     """

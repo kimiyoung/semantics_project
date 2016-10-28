@@ -23,6 +23,7 @@ def main(save_path, params):
     char_dim = params['char_dim']
     use_feat = params['use_feat']
     train_cut = params['train_cut']
+    gating_fn = params['gating_fn']
 
     # save settings
     shutil.copyfile('config.py','%s/config.py'%save_path)
@@ -40,7 +41,7 @@ def main(save_path, params):
     W_init, embed_dim, = Helpers.load_word2vec_embeddings(data.dictionary[0], word2vec)
     m = eval(base_model).Model(nlayers, data.vocab_size, data.num_chars, W_init, 
             regularizer, rlambda, nhidden, embed_dim, dropout, train_emb, subsample, 
-            char_dim, use_feat)
+            char_dim, use_feat, gating_fn)
 
     print("training ...")
     num_iter = 0

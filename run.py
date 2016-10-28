@@ -37,6 +37,8 @@ parser.add_argument('--use_feat', dest='use_feat', type=int, default=0,
         help='Use token_in_query feature - (0-no, 1-yes)')
 parser.add_argument('--train_cut', dest='train_cut', type=float, default=1.0,
         help='Cut training data size by factor (default - no cut)')
+parser.add_argument('--gating_fn', dest='gating_fn', type=str, default='T.mul',
+        help='Gating function (T.mul || Tsum || Tconcat)')
 args = parser.parse_args()
 params=vars(args)
 
@@ -51,7 +53,7 @@ save_path = ('experiments/'+params['model']+'/'+params['dataset'].split('/')[0]+
         '_dropout%.1f'%params['dropout']+'_%s'%w2v_filename+'_chardim%d'%params['char_dim']+
         '_train%d'%params['train_emb']+'_subsample%d'%params['subsample']+
         '_seed%d'%params['seed']+'_use-feat%d'%params['use_feat']+
-        '_traincut%.1f'%params['train_cut']+'/')
+        '_traincut%.1f'%params['train_cut']+'_gf%s'%params['gating_fn']+'/')
 if not os.path.exists(save_path): os.makedirs(save_path)
 
 # train
