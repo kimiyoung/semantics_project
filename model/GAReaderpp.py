@@ -123,7 +123,9 @@ class Model:
                 (qry_shp[0],qry_shp[1],self.embed_dim)) # B x N x DE
         l_fembed = L.EmbeddingLayer(l_featin, input_size=2, output_size=2) # B x N x 2
 
-        if self.train_emb==0: l_docembed.params[l_docembed.W].remove('trainable')
+        if self.train_emb==0: 
+            l_docembed.params[l_docembed.W].remove('trainable')
+            l_qembed.params[l_qembed.W].remove('trainable')
 
         # char embeddings
         if self.use_chars:
