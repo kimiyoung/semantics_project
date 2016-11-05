@@ -129,11 +129,11 @@ class Model:
 
         # char embeddings
         if self.use_chars:
-            l_lookup = L.EmbeddingLayer(l_tokin, self.num_chars, 2*self.char_dim) # T x L x D
+            l_lookup = L.EmbeddingLayer(l_tokin, self.num_chars, self.char_dim) # T x L x D
             l_fgru = L.GRULayer(l_lookup, self.char_dim, grad_clipping=GRAD_CLIP, 
                     mask_input=l_tokmask, gradient_steps=GRAD_STEPS, precompute_input=True,
                     only_return_final=True)
-            l_bgru = L.GRULayer(l_lookup, 2*self.char_dim, grad_clipping=GRAD_CLIP, 
+            l_bgru = L.GRULayer(l_lookup, self.char_dim, grad_clipping=GRAD_CLIP, 
                     mask_input=l_tokmask, gradient_steps=GRAD_STEPS, precompute_input=True, 
                     backwards=True, only_return_final=True) # T x 2D
             l_fwdembed = L.DenseLayer(l_fgru, self.embed_dim/2, nonlinearity=None) # T x DE/2

@@ -17,9 +17,9 @@ parser.add_argument('--lambda', dest='lambda', type=float, default=0.,
         help='weight of regularization')
 parser.add_argument('--nhidden', dest='nhidden', type=int, default=128,
         help='GRU hidden state size')
-parser.add_argument('--char_dim', dest='char_dim', type=int, default=25,
+parser.add_argument('--char_dim', dest='char_dim', type=int, default=50,
         help='Size of char embeddings (0 to turn off). Char GRU hidden size = 2*char_dim.')
-parser.add_argument('--nlayers', dest='nlayers', type=int, default=2,
+parser.add_argument('--nlayers', dest='nlayers', type=int, default=3,
         help='Number of reader layers')
 parser.add_argument('--dropout', dest='dropout', type=float, default=0.3,
         help='Dropout rate')
@@ -27,13 +27,13 @@ parser.add_argument('--word2vec', dest='word2vec', type=str, default=None,
         help='File with word embeddings. Should have header with number and size of embeddings.')
 parser.add_argument('--dataset', dest='dataset', type=str, default='wdw',
         help='Dataset - (cnn/questions || dailymail/questions || cbtcn || cbtne || wdw)')
-parser.add_argument('--train_emb', dest='train_emb', type=int, default=0,
+parser.add_argument('--train_emb', dest='train_emb', type=int, default=1,
         help='Tune word embeddings - (0-No, 1-Yes)')
 parser.add_argument('--subsample', dest='subsample', type=int, default=-1,
         help='Sample window size around candidates. (-1-no sampling)')
 parser.add_argument('--seed', dest='seed', type=int, default=1,
         help='Seed for different experiments with same settings')
-parser.add_argument('--use_feat', dest='use_feat', type=int, default=0,
+parser.add_argument('--use_feat', dest='use_feat', type=int, default=1,
         help='Use token_in_query feature - (0-no, 1-yes)')
 parser.add_argument('--train_cut', dest='train_cut', type=float, default=1.0,
         help='Cut training data size by factor (default - no cut)')
