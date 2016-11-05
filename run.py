@@ -17,7 +17,7 @@ parser.add_argument('--lambda', dest='lambda', type=float, default=0.,
         help='weight of regularization')
 parser.add_argument('--nhidden', dest='nhidden', type=int, default=128,
         help='GRU hidden state size')
-parser.add_argument('--char_dim', dest='char_dim', type=int, default=25,
+parser.add_argument('--char_dim', dest='char_dim', type=int, default=50,
         help='Size of char embeddings (0 to turn off). Char GRU hidden size = 2*char_dim.')
 parser.add_argument('--nlayers', dest='nlayers', type=int, default=2,
         help='Number of reader layers')
