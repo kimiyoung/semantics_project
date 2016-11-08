@@ -24,9 +24,6 @@ def main(load_path, params, mode='test'):
     use_feat = params['use_feat']
     gating_fn = params['gating_fn']
 
-    # load settings
-    shutil.copyfile('%s/config.py'%load_path,'config.py')
-
     dp = DataPreprocessor.DataPreprocessor()
     data = dp.preprocess(dataset, no_training_set=True)
     inv_vocab = data.inv_dictionary
