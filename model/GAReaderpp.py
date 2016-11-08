@@ -117,15 +117,15 @@ class Model:
                 output_size=self.embed_dim, W=W_init) # B x N x 1 x DE
         l_doce = L.ReshapeLayer(l_docembed, 
                 (doc_shp[0],doc_shp[1],self.embed_dim)) # B x N x DE
-        l_qembed = L.EmbeddingLayer(l_qin, input_size=vocab_size, 
+        l_qemb = L.EmbeddingLayer(l_qin, input_size=vocab_size, 
                 output_size=self.embed_dim, W=l_docembed.W)
-        l_qembed = L.ReshapeLayer(l_qembed, 
+        l_qembed = L.ReshapeLayer(l_qemb, 
                 (qry_shp[0],qry_shp[1],self.embed_dim)) # B x N x DE
         l_fembed = L.EmbeddingLayer(l_featin, input_size=2, output_size=2) # B x N x 2
 
         if self.train_emb==0: 
             l_docembed.params[l_docembed.W].remove('trainable')
-            l_qembed.params[l_qembed.W].remove('trainable')
+            l_qemb.params[l_qemb.W].remove('trainable')
 
         # char embeddings
         if self.use_chars:
