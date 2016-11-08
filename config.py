@@ -17,7 +17,7 @@ MAX_WORD_LEN = 10
 def get_params(dataset):
     if dataset=='cbtcn':
         return cbtcn_params
-    elif dataset=='wdw' or 'wdw_relaxed':
+    elif dataset=='wdw' or dataset=='wdw_relaxed':
         return wdw_params
     elif dataset=='cnn':
         return cnn_params
@@ -42,8 +42,8 @@ wdw_params = {
         'char_dim'  :   25,
         'dropout'   :   0.3,
         'word2vec'  :   'word2vec/word2vec_glove.txt',
-        'train_emb' :   0,
-        'use_feat'  :   1,
+        'train_emb' :   1,
+        'use_feat'  :   0,
         }
 
 cnn_params = {
