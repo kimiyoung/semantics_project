@@ -115,6 +115,9 @@ class DataPreprocessor:
         ans_raw = raw[6].strip() # answer
         cand_raw = map(lambda x:x.strip().split(':')[0].split(), 
                 raw[8:]) # candidate answers
+        if not any(aa in doc_raw for aa in ans_raw.split()):
+            print "answer not in doc %s" % fname
+            return None
 
         # wrap the query with special symbols
         qry_raw.insert(0, SYMB_BEGIN)
@@ -148,7 +151,11 @@ class DataPreprocessor:
         where each element is in the form of (document, query, answer, filename)
         """
         all_files = glob.glob(directory + '/*.question')
-        questions = [self.parse_one_file(f, dictionary, use_chars) + (f,) for f in all_files]
+        questions = []
+        for f in all_files:
+            qn = self.parse_one_file(f, dictionary, use_chars)
+            if qn is not None: questions.append(qn+(f,))
+        #questions = [self.parse_one_file(f, dictionary, use_chars) + (f,) for f in all_files]
         return questions
 
     def gen_text_for_word2vec(self, question_dir, text_file):

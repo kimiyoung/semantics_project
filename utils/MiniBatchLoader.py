@@ -29,7 +29,7 @@ class MiniBatchLoader():
             value: indexes of questions with document length equal to key
         """
         # round the input to the nearest power of two
-        round_to_power = lambda x: 2**(int(np.log2(x-1))+1)
+        round_to_power = lambda x: 2**(int(np.log2(x-1))+1) if x>1 else 1
 
         doc_len = map(lambda x:round_to_power(len(x[0])), questions)
         bins = {}

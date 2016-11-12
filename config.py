@@ -1,5 +1,5 @@
 # Minibatch Size
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 # Gradient clip threshold
 GRAD_CLIP = 10
 # Learning rate
@@ -25,6 +25,8 @@ def get_params(dataset):
         return dailymail_params
     elif dataset=='cbtne':
         return cbtne_params
+    elif dataset=='lambada':
+        return lambada_params
     else:
         raise ValueError("Dataset %s not found"%dataset)
 
@@ -71,4 +73,13 @@ cbtne_params = {
         'word2vec'  :   'word2vec/word2vec_glove.txt',
         'train_emb' :   0,
         'use_feat'  :   1,
+        }
+
+lambada_params = {
+        'nhidden'   :   128,
+        'char_dim'  :   0,
+        'dropout'   :   0.3,
+        'word2vec'  :   'word2vec/word2vec_glove.txt',
+        'train_emb' :   1,
+        'use_feat'  :   0,
         }
