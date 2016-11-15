@@ -1,5 +1,5 @@
 # Minibatch Size
-BATCH_SIZE = 64
+BATCH_SIZE = 128
 # Gradient clip threshold
 GRAD_CLIP = 10
 # Learning rate
@@ -78,7 +78,7 @@ cbtne_params = {
 lambada_params = {
         'nhidden'   :   128,
         'char_dim'  :   0,
-        'dropout'   :   0.3,
+        'dropout'   :   0.2,
         'word2vec'  :   'word2vec/word2vec_glove.txt',
         'train_emb' :   1,
         'use_feat'  :   0,
