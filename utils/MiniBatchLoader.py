@@ -12,6 +12,7 @@ class MiniBatchLoader():
         else: self.questions = random.sample(questions, 
                 int(sample*len(questions)))
         self.bins = self.build_bins(self.questions)
+        self.max_doc_len = max(self.bins.keys())
         self.max_qry_len = max(map(lambda x:len(x[1]), self.questions))
         self.max_num_cand = max(map(lambda x:len(x[3]), self.questions))
         self.max_word_len = MAX_WORD_LEN
@@ -75,7 +76,9 @@ class MiniBatchLoader():
         dw = np.zeros((curr_batch_size, curr_max_doc_len, 1), dtype='int32') # document words
         qw = np.zeros((curr_batch_size, self.max_qry_len, 1), dtype='int32') # query words
         c = np.zeros((curr_batch_size, curr_max_doc_len, self.max_num_cand), 
-                dtype='int16')   # candidate answers
+                dtype='int32')   # candidate answers
+        cr = np.zeros((curr_batch_size, curr_max_doc_len, curr_max_doc_len),
+                dtype='int32') # coref aggragator
         cl = np.zeros((curr_batch_size,), dtype='int32') # position of cloze in query
 
         m_dw = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32')  # document word mask
@@ -83,13 +86,14 @@ class MiniBatchLoader():
         m_c = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32') # candidate mask
 
         a = np.zeros((curr_batch_size, ), dtype='int32')    # correct answer
+        a_cr = np.zeros((curr_batch_size, ), dtype='int32')    # correct answer
         fnames = ['']*curr_batch_size
 
         types = {}
 
         for n, ix in enumerate(ixs):
 
-            doc_w, qry_w, ans, cand, doc_c, qry_c, cloze, fname = self.questions[ix]
+            doc_w, qry_w, ans, cand, doc_c, qry_c, cloze, coref, fname = self.questions[ix]
 
             # document, query and candidates
             dw[n,:len(doc_w),0] = np.array(doc_w)
@@ -108,11 +112,31 @@ class MiniBatchLoader():
                 types[wtuple].append((1,n,it))
 
             # search candidates in doc
+            ans_idx = []
             for it,cc in enumerate(cand):
                 index = [ii for ii in range(len(doc_w)) if doc_w[ii] in cc]
                 m_c[n,index] = 1
                 c[n,index,it] = 1
-                if ans==cc: a[n] = it # answer
+                if ans==cc: 
+                    ans_idx = index
+                    a[n] = it # answer
+            assert ans_idx, "answer index in doc empty! %s" % fname
+
+            # build coref aggragtor
+            tracker = set(range(len(doc_w)))
+            ic = 0
+            for it in range(len(doc_w)):
+                if it not in tracker: continue
+                chains = set([it]).union(*[chain for chain in coref if it in chain])
+                cr[n,list(chains),ic] = 1
+                tracker = tracker.difference(chains)
+                if any(aa in chains for aa in ans_idx): 
+                    assert chains, "answer set to empty index. %s" % fname
+                    a_cr[n] = ic
+                ic += 1
+
+            if not np.argwhere(cr[n,:,a_cr[n]]).size>0:
+                print "set break here"
 
             cl[n] = cloze
             fnames[n] = fname
@@ -133,7 +157,7 @@ class MiniBatchLoader():
 
         self.ptr += 1
 
-        return dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, fnames
+        return dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, cr, a_cr, fnames
 
 def unit_test(mini_batch_loader):
     """unit test to validate MiniBatchLoader using max-frequency (exclusive).
@@ -156,7 +180,7 @@ if __name__ == '__main__':
 
     from DataPreprocessor import *
     
-    cnn = DataPreprocessor().preprocess("cnn/questions", no_training_set=True)
-    mini_batch_loader = MiniBatchLoader(cnn.validation, 64)
-    unit_test(mini_batch_loader)
-
+    cnn = DataPreprocessor().preprocess("lambada", True, no_training_set=True, use_chars=False)
+    mini_batch_loader = MiniBatchLoader(cnn.validation, 64, True)
+    for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, fnames in mini_batch_loader:
+        print 'running'

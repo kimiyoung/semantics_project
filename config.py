@@ -1,5 +1,5 @@
 # Minibatch Size
-BATCH_SIZE = 128
+BATCH_SIZE = 32
 # Gradient clip threshold
 GRAD_CLIP = 10
 # Learning rate
@@ -27,6 +27,8 @@ def get_params(dataset):
         return cbtne_params
     elif dataset=='lambada':
         return lambada_params
+    elif dataset=='debug':
+        return debug_params
     else:
         raise ValueError("Dataset %s not found"%dataset)
 
@@ -76,10 +78,19 @@ cbtne_params = {
         }
 
 lambada_params = {
-        'nhidden'   :   128,
+        'nhidden'   :   256,
         'char_dim'  :   0,
         'dropout'   :   0.2,
         'word2vec'  :   'word2vec/word2vec_glove.txt',
+        'train_emb' :   1,
+        'use_feat'  :   0,
+        }
+
+debug_params = {
+        'nhidden'   :   8,
+        'char_dim'  :   0,
+        'dropout'   :   0.2,
+        'word2vec'  :   None,
         'train_emb' :   1,
         'use_feat'  :   0,
         }

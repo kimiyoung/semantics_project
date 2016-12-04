@@ -17,7 +17,8 @@ def prepare_input(d,q):
 class Model:
 
     def __init__(self, K, vocab_size, num_chars, W_init, regularizer, rlambda, 
-            nhidden, embed_dim, dropout, train_emb, subsample, char_dim, use_feat, gating_fn, 
+            nhidden, embed_dim, dropout, train_emb, subsample, char_dim, use_feat, 
+            gating_fn, coref, 
             save_attn=False):
         self.nhidden = nhidden
         self.embed_dim = embed_dim
@@ -30,73 +31,98 @@ class Model:
         self.use_feat = use_feat
         self.save_attn = save_attn
         self.gating_fn = gating_fn
+        self.coref = coref
 
         norm = lasagne.regularization.l2 if regularizer=='l2' else lasagne.regularization.l1
         self.use_chars = self.char_dim!=0
         if W_init is None: W_init = lasagne.init.GlorotNormal().sample((vocab_size, self.embed_dim))
 
-        doc_var, query_var, cand_var = T.itensor3('doc'), T.itensor3('quer'), \
-                T.wtensor3('cand')
+        doc_var, query_var = T.itensor3('doc'), T.itensor3('quer')
+        cand_var, coref_var = T.itensor3('cand'), T.itensor3('coref')
         docmask_var, qmask_var, candmask_var = T.bmatrix('doc_mask'), T.bmatrix('q_mask'), \
                 T.bmatrix('c_mask')
-        target_var = T.ivector('ans')
+        target_var, coref_target_var = T.ivector('ans'), T.ivector('cans')
         feat_var = T.imatrix('feat')
         doc_toks, qry_toks= T.imatrix('dchars'), T.imatrix('qchars')
         tok_var, tok_mask = T.imatrix('tok'), T.bmatrix('tok_mask')
         cloze_var = T.ivector('cloze')
         self.inps = [doc_var, doc_toks, query_var, qry_toks, cand_var, target_var, docmask_var,
-                qmask_var, tok_var, tok_mask, candmask_var, feat_var, cloze_var]
+                qmask_var, tok_var, tok_mask, candmask_var, feat_var, cloze_var, coref_var,
+                coref_target_var]
 
         if rlambda> 0.: W_pert = W_init + lasagne.init.GlorotNormal().sample(W_init.shape)
         else: W_pert = W_init
-        self.predicted_probs, predicted_probs_val, self.network, W_emb, attentions = (
+        self.predicted_probs, predicted_probs_val, self.predicted_probs_coref, \
+                predicted_probs_coref_val, doc_probs_val, self.network, W_emb, attentions = (
                 self.build_network(K, vocab_size, W_pert))
 
-        self.loss_fn = T.nnet.categorical_crossentropy(self.predicted_probs, target_var).mean() + \
-                rlambda*norm(W_emb-W_init)
+        self.coref_loss_fn = T.nnet.categorical_crossentropy(self.predicted_probs_coref, 
+                coref_target_var).mean() + rlambda*norm(W_emb-W_init)
+        coref_loss_fn_val = T.nnet.categorical_crossentropy(predicted_probs_coref_val, 
+                coref_target_var).mean() + rlambda*norm(W_emb-W_init)
+        self.coref_eval_fn = lasagne.objectives.categorical_accuracy(self.predicted_probs_coref, 
+                coref_target_var).mean()
+        coref_eval_fn_val = lasagne.objectives.categorical_accuracy(predicted_probs_coref_val, 
+                coref_target_var).mean()
+
+        self.loss_fn = T.nnet.categorical_crossentropy(self.predicted_probs, 
+                target_var).mean() + rlambda*norm(W_emb-W_init)
+        loss_fn_val = T.nnet.categorical_crossentropy(predicted_probs_val, 
+                target_var).mean() + rlambda*norm(W_emb-W_init)
         self.eval_fn = lasagne.objectives.categorical_accuracy(self.predicted_probs, 
                 target_var).mean()
-
-        loss_fn_val = T.nnet.categorical_crossentropy(predicted_probs_val, target_var).mean() + \
-                rlambda*norm(W_emb-W_init)
         eval_fn_val = lasagne.objectives.categorical_accuracy(predicted_probs_val, 
                 target_var).mean()
 
         self.params = L.get_all_params(self.network, trainable=True)
         
-        updates = lasagne.updates.adam(self.loss_fn, self.params, learning_rate=self.learning_rate)
+        if self.coref:
+            updates = lasagne.updates.adam(self.coref_loss_fn, self.params, 
+                    learning_rate=self.learning_rate)
+        else:
+            updates = lasagne.updates.adam(self.loss_fn, self.params, 
+                    learning_rate=self.learning_rate)
 
         self.train_fn = theano.function(self.inps,
-                [self.loss_fn, self.eval_fn, self.predicted_probs], 
+                [self.loss_fn, self.eval_fn, self.predicted_probs, 
+                    self.coref_loss_fn, self.coref_eval_fn, self.predicted_probs_coref], 
                 updates=updates,
                 on_unused_input='warn')
         self.validate_fn = theano.function(self.inps, 
-                [loss_fn_val, eval_fn_val, predicted_probs_val]+attentions,
+                [loss_fn_val, eval_fn_val, predicted_probs_val, 
+                    coref_loss_fn_val, coref_eval_fn_val, 
+                    predicted_probs_coref_val, doc_probs_val]+attentions,
                 on_unused_input='warn')
 
     def anneal(self):
         self.learning_rate /= 2
-        updates = lasagne.updates.adam(self.loss_fn, self.params, learning_rate=self.learning_rate)
-        self.train_fn = theano.function(self.inps, \
-                [self.loss_fn, self.eval_fn, self.predicted_probs], 
+        if self.coref:
+            updates = lasagne.updates.adam(self.coref_loss_fn, self.params, 
+                    learning_rate=self.learning_rate)
+        else:
+            updates = lasagne.updates.adam(self.loss_fn, self.params, 
+                    learning_rate=self.learning_rate)
+        self.train_fn = theano.function(self.inps,
+                [self.loss_fn, self.eval_fn, self.predicted_probs, 
+                    self.coref_loss_fn, self.coref_eval_fn, self.predicted_probs_coref], 
                 updates=updates,
                 on_unused_input='warn')
 
-    def train(self, dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl):
+    def train(self, dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, cr, a_cr):
         f = prepare_input(dw,qw)
         if self.subsample!=-1: m_dw = sub_sample(m_dw, m_c, self.subsample)
         return self.train_fn(dw, dt, qw, qt, c, a, 
                 m_dw.astype('int8'), m_qw.astype('int8'), 
                 tt, tm.astype('int8'), 
-                m_c.astype('int8'), f, cl)
+                m_c.astype('int8'), f, cl, cr, a_cr)
 
-    def validate(self, dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl):
+    def validate(self, dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, cr, a_cr):
         f = prepare_input(dw,qw)
         if self.subsample!=-1: m_dw = sub_sample(m_dw, m_c, self.subsample)
         return self.validate_fn(dw, dt, qw, qt, c, a, 
                 m_dw.astype('int8'), m_qw.astype('int8'), 
                 tt, tm.astype('int8'), 
-                m_c.astype('int8'), f, cl)
+                m_c.astype('int8'), f, cl, cr, a_cr)
 
     def build_network(self, K, vocab_size, W_init):
 
@@ -197,12 +223,16 @@ class Model:
             l_m = PairwiseInteractionLayer([l_doc, l_q])
             attentions.append(L.get_output(l_m, deterministic=True))
 
-        l_prob = AttentionSumLayer([l_doc,l_q], self.inps[4], self.inps[12], 
-                mask_input=self.inps[10])
+        l_ans = AnswerLayer([l_doc,l_q], self.inps[12])
+        l_prob = AttentionSumLayer(l_ans, self.inps[4], mask_input=self.inps[10])
+        l_prob_c = AttentionSumLayer(l_ans, self.inps[13], mask_input=self.inps[10])
+        doc_probs_v = L.get_output(l_ans, deterministic=True)
         final = L.get_output(l_prob)
         final_v = L.get_output(l_prob, deterministic=True)
+        final_c = L.get_output(l_prob_c)
+        final_c_v = L.get_output(l_prob_c, deterministic=True)
 
-        return final, final_v, l_prob, l_docembed.W, attentions
+        return final, final_v, final_c, final_c_v, doc_probs_v, l_prob, l_docembed.W, attentions
 
     def load_model(self, load_path):
         with open(load_path, 'r') as f:

@@ -3,6 +3,7 @@ import glob
 import os
 import sys
 
+from itertools import izip
 from config import MAX_WORD_LEN
 
 SYMB_BEGIN = "@begin"
@@ -10,7 +11,7 @@ SYMB_END = "@end"
 
 class Data:
 
-    def __init__(self, dictionary, num_entities, training, validation, test):
+    def __init__(self, dictionary, num_entities, training, validation, test, word_counts):
         self.dictionary = dictionary
         self.training = training
         self.validation = validation
@@ -19,30 +20,84 @@ class Data:
         self.num_chars = len(dictionary[1])
         self.num_entities = num_entities
         self.inv_dictionary = {v:k for k,v in dictionary[0].items()}
+        self.word_counts = word_counts
 
 class DataPreprocessor:
 
     def preprocess(self, question_dir, no_training_set=False, use_chars=True):
         """
         preprocess all data into a standalone Data object.
-        the training set will be left out (to save debugging time) when no_training_set is True.
+        the training set will be left out (to save debugging time) when no_training_set
+        is True.
         """
         vocab_f = os.path.join(question_dir,"vocab.txt")
+        wc_f = os.path.join(question_dir,"wc.npy")
         word_dictionary, char_dictionary, num_entities = \
                 self.make_dictionary(question_dir, vocab_file=vocab_f)
+        word_counts = self.word_count(question_dir, word_dictionary, wc_f)
         dictionary = (word_dictionary, char_dictionary)
         if no_training_set:
             training = None
         else:
             print "preparing training data ..."
-            training = self.parse_all_files(question_dir + "/training", dictionary, use_chars)
+            training = self.parse_all_files(question_dir + "/training", 
+                    dictionary, use_chars)
         print "preparing validation data ..."
-        validation = self.parse_all_files(question_dir + "/validation", dictionary, use_chars)
+        validation = self.parse_all_files(question_dir + "/validation", 
+                dictionary, use_chars)
         print "preparing test data ..."
         test = self.parse_all_files(question_dir + "/test", dictionary, use_chars)
 
-        data = Data(dictionary, num_entities, training, validation, test)
+        data = Data(dictionary, num_entities, training, validation, test, word_counts)
         return data
+
+    def word_count(self, question_dir, word_dictionary, wc_file):
+
+        if os.path.exists(wc_file):
+            print "loading word counts from " + wc_file + " ..."
+            word_counts = np.load(wc_file)
+        else:
+            print "no " + wc_file + " found, constructing the word counts ..."
+            word_counts = np.zeros((len(word_dictionary),))
+
+            if os.path.isfile(question_dir+'/training.data'):
+                f = open(question_dir+'/training.data')
+                for line in f:
+                    for w in line.rstrip().split():
+                        word_counts[word_dictionary[w]] += 1
+                f.close()
+                f = open(question_dir+'/validation.data')
+                for line in f:
+                    for w in line.rstrip().split():
+                        word_counts[word_dictionary[w]] += 1
+                f.close()
+                f = open(question_dir+'/test.data')
+                for line in f:
+                    for w in line.rstrip().split():
+                        word_counts[word_dictionary[w]] += 1
+                f.close()
+            else:
+                fnames = []
+                fnames += glob.glob(question_dir + "/test" + "/*.question")
+                fnames += glob.glob(question_dir + "/validation" + "/*.question")
+                fnames += glob.glob(question_dir + "/training" + "/*.question")
+
+                n = 0.
+                for fname in fnames:
+                    
+                    fp = open(fname)
+                    fp.readline()
+                    fp.readline()
+                    document = fp.readline().split()
+                    fp.readline()
+                    query = fp.readline().split()
+                    fp.close()
+
+                    for w in document+query:
+                        word_counts[word_dictionary[w]] += 1
+            np.save(wc_file, word_counts)
+
+        return word_counts
 
     def make_dictionary(self, question_dir, vocab_file):
 
@@ -52,34 +107,50 @@ class DataPreprocessor:
         else:
             print "no " + vocab_file + " found, constructing the vocabulary list ..."
 
-            fnames = []
-            fnames += glob.glob(question_dir + "/test/*.question")
-            fnames += glob.glob(question_dir + "/validation/*.question")
-            fnames += glob.glob(question_dir + "/training/*.question")
-
             vocab_set = set()
-            n = 0.
-            for fname in fnames:
-                
-                fp = open(fname)
-                fp.readline()
-                fp.readline()
-                document = fp.readline().split()
-                fp.readline()
-                query = fp.readline().split()
-                fp.close()
 
-                vocab_set |= set(document) | set(query)
+            if os.path.isfile(question_dir+'/training.data'):
+                print "found data file"
+                f = open(question_dir+'/training.data')
+                for line in f:
+                    vocab_set |= set(line.rstrip().split())
+                f.close()
+                f = open(question_dir+'/validation.data')
+                for line in f:
+                    vocab_set |= set(line.rstrip().split())
+                f.close()
+                f = open(question_dir+'/test.data')
+                for line in f:
+                    vocab_set |= set(line.rstrip().split())
+                f.close()
+            else:
+                fnames = []
+                fnames += glob.glob(question_dir + "/test" + "/*.question")
+                fnames += glob.glob(question_dir + "/validation" + "/*.question")
+                fnames += glob.glob(question_dir + "/training" + "/*.question")
 
-                # show progress
-                n += 1
-                if n % 10000 == 0:
-                    print '%3d%%' % int(100*n/len(fnames))
+                n = 0.
+                for fname in fnames:
+                    
+                    fp = open(fname)
+                    fp.readline()
+                    fp.readline()
+                    document = fp.readline().split()
+                    fp.readline()
+                    query = fp.readline().split()
+                    fp.close()
 
-            entities = set(e for e in vocab_set if e.startswith('@entity'))
+                    vocab_set |= set(document) | set(query)
+
+                    # show progress
+                    n += 1
+                    if n % 10000 == 0:
+                        print '%3d%%' % int(100*n/len(fnames))
+
+            entities = set(e for e in vocab_set.keys() if e.startswith('@entity'))
 
             # @placehoder, @begin and @end are included in the vocabulary list
-            tokens = vocab_set.difference(entities)
+            tokens = set(vocab_set.keys()).difference(entities)
             tokens.add(SYMB_BEGIN)
             tokens.add(SYMB_END)
 
@@ -104,21 +175,9 @@ class DataPreprocessor:
 
         return word_dictionary, char_dictionary, num_entities
 
-    def parse_one_file(self, fname, dictionary, use_chars):
-        """
-        parse a *.question file into tuple(document, query, answer, filename)
-        """
-        w_dict, c_dict = dictionary[0], dictionary[1]
-        raw = open(fname).readlines()
-        doc_raw = raw[2].split() # document
-        qry_raw = raw[4].split() # query
-        ans_raw = raw[6].strip() # answer
-        cand_raw = map(lambda x:x.strip().split(':')[0].split(), 
-                raw[8:]) # candidate answers
-        if not any(aa in doc_raw for aa in ans_raw.split()):
-            print "answer not in doc %s" % fname
-            return None
-
+    @staticmethod
+    def process_question(doc_raw, qry_raw, ans_raw, cand_raw, w_dict, 
+            c_dict, use_chars, fname):
         # wrap the query with special symbols
         qry_raw.insert(0, SYMB_BEGIN)
         qry_raw.append(SYMB_END)
@@ -145,17 +204,88 @@ class DataPreprocessor:
 
         return doc_words, qry_words, ans, cand, doc_chars, qry_chars, cloze
 
+    def parse_one_file(self, fname, dictionary, use_chars):
+        """
+        parse a *.question file into tuple(document, query, answer, filename)
+        """
+        w_dict, c_dict = dictionary[0], dictionary[1]
+        raw = open(fname).readlines()
+        doc_raw = raw[2].split() # document
+        qry_raw = raw[4].split() # query
+        ans_raw = raw[6].strip() # answer
+
+        # candidates and corefs
+        def _parse_coref(line):
+            all_tokens = [mi for m in line.strip().split('\t') for mi in m.split()]
+            return set([int(t.rsplit(':',1)[1])-1 for t in all_tokens])
+        try:
+            # corefs
+            split = raw[8:].index('\n')
+            cand_raw = map(lambda x:x.strip().split(':')[0].split(), 
+                    raw[8:8+split]) # candidate answers
+            coref = [_parse_coref(line) for line in raw[9+split:]]
+        except ValueError:
+            # no corefs
+            cand_raw = map(lambda x:x.strip().split(':')[0].split(), 
+                    raw[8:]) # candidate answers
+            coref = []
+        if not any(aa in doc_raw for aa in ans_raw.split()):
+            print "answer not in doc %s" % fname
+            return None
+
+        return self.process_question(doc_raw, qry_raw, ans_raw, cand_raw, w_dict, c_dict,
+                use_chars, fname) + (coref,)
+
+    def parse_data_file(self, fdata, fcoref, dictionary, use_chars, stops):
+        """
+        parse a *.data file into list of tuple(document, query, answer, filename)
+        """
+        w_dict, c_dict = dictionary[0], dictionary[1]
+        questions = []
+        with open(fdata) as data, open(fcoref) as coreffile:
+            for ii, (raw, corefs) in enumerate(izip(data, coreffile)):
+                sents = raw.rstrip().rsplit(' . ', 1) # doc and query
+                doc_raw = sents[0].split() # document
+                qry_tok = sents[1].rstrip().split()
+                qry_raw, ans_raw =  qry_tok[:-1], qry_tok[-1] # query and answer
+                cand_raw = filter(lambda x:x not in stops, set(doc_raw))
+                if ans_raw not in cand_raw: continue
+                cand_raw = [[cd] for cd in cand_raw]
+
+                # candidates and corefs
+                def _parse_coref(line):
+                    all_tokens = filter(lambda x:x, [mi for m in line.split() 
+                            for mi in m.split('|')])
+                    return set([int(t.rsplit(':',1)[1])-1 for t in all_tokens])
+                all_coref = corefs.rstrip()
+                if all_coref: coref = [_parse_coref(line) for line in all_coref.split('\t')]
+                else: coref = []
+                if not any(aa in doc_raw for aa in ans_raw.split()):
+                    print "answer not in doc %s" % ii
+                    continue
+
+                questions.append(self.process_question(doc_raw, qry_raw, ans_raw, 
+                    cand_raw, w_dict, c_dict, use_chars, ii) + (coref,ii))
+
+        return questions
+
     def parse_all_files(self, directory, dictionary, use_chars):
         """
         parse all files under the given directory into a list of questions,
         where each element is in the form of (document, query, answer, filename)
         """
-        all_files = glob.glob(directory + '/*.question')
-        questions = []
-        for f in all_files:
-            qn = self.parse_one_file(f, dictionary, use_chars)
-            if qn is not None: questions.append(qn+(f,))
-        #questions = [self.parse_one_file(f, dictionary, use_chars) + (f,) for f in all_files]
+        if os.path.isfile(directory+'.data'):
+            print "found data file!"
+            basedir = directory.rsplit('/',1)[0]
+            stops = open(basedir+'/shortlist-stopwords.txt').read().splitlines()
+            questions = self.parse_data_file(directory+'.data', directory+'.coref', 
+                    dictionary, use_chars, stops)
+        else:
+            all_files = glob.glob(directory + '/*.question')
+            questions = []
+            for f in all_files:
+                qn = self.parse_one_file(f, dictionary, use_chars)
+                if qn is not None: questions.append(qn+(f,))
         return questions
 
     def gen_text_for_word2vec(self, question_dir, text_file):

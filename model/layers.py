@@ -76,39 +76,62 @@ class PairwiseInteractionLayer(L.MergeLayer):
         q_shuf = inputs[1].dimshuffle(0,2,1) # B x D x Q
         return T.batched_dot(inputs[0], q_shuf) # B x N x Q
 
-class AttentionSumLayer(L.MergeLayer):
+class AttentionSumLayer(L.Layer):
     """
-    Layer which takes two 3D tensors D,Q, an aggregator A, and a pointer X as input. First elements
-    of Q indexed by X are extracted, then a matching score between D and the extracted element is 
-    computed. Finally the scores are aggregated by multiplying with A and returned. The mask input
-    is over D.
+    Layer to aggregate the scores in the input tensor by multiplying with A. 
+    The mask input is over D.
     """
 
-    def __init__(self, incomings, aggregator, pointer, mask_input=None, **kwargs):
-        super(AttentionSumLayer, self).__init__(incomings, **kwargs)
-        if mask_input is not None and type(mask_input).__name__!='TensorVariable': 
+    def __init__(self, incoming, aggregator, mask_input=None, **kwargs):
+        super(AttentionSumLayer, self).__init__(incoming, **kwargs)
+        if mask_input is not None and type(mask_input).__name__!='TensorVariable':
             raise TypeError('Mask input must be theano tensor variable')
         self.mask = mask_input
         self.aggregator = aggregator
+        
+    def get_output_shape_for(self, input_shape):
+        return (input_shape[0], None)
+
+    def get_output_for(self, input, **kwargs):
+
+        # input: B x N
+        # self.aggregator: B x N x C
+        # self.mask: B x N
+
+        if self.mask:
+            pm = input*self.mask # B x N
+            pm = pm/pm.sum(axis=1)[:,np.newaxis] # B x N
+        else:
+            pm = input # B x N
+
+        return T.batched_dot(pm, self.aggregator) # B x C
+
+class AnswerLayer(L.MergeLayer):
+    """
+    Layer which takes two 3D tensors D, Q and a pointer X as input. First, the elements 
+    of Q indexed by X are extracted and then an inner product between second dimension
+    of D and these elements is computed. This is a passed through a softmax layer to 
+    return a distribution over the second dimension of D.
+    """
+
+    def __init__(self, incomings, pointer, **kwargs):
+        super(AnswerLayer, self).__init__(incomings, **kwargs)
         self.pointer = pointer
         
     def get_output_shape_for(self, input_shapes):
-        return (input_shapes[2][0], input_shapes[2][2])
+        return (input_shapes[0][0], input_shapes[0][1])
 
     def get_output_for(self, inputs, **kwargs):
 
         # inputs[0]: B x N x D
         # inputs[1]: B x Q x D
-        # self.aggregator: B x N x C
         # self.pointer: B x 1
-        # self.mask: B x N
 
         q = inputs[1][T.arange(inputs[1].shape[0]),self.pointer,:] # B x D
         p = T.batched_dot(inputs[0],q) # B x N
-        pm = T.nnet.softmax(p)*self.mask # B x N
-        pm = pm/pm.sum(axis=1)[:,np.newaxis] # B x N
+        pm = T.nnet.softmax(p) # B x N
 
-        return T.batched_dot(pm, self.aggregator)
+        return pm
 
 class BilinearAttentionLayer(L.MergeLayer):
     """
