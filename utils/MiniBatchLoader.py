@@ -135,9 +135,6 @@ class MiniBatchLoader():
                     a_cr[n] = ic
                 ic += 1
 
-            if not np.argwhere(cr[n,:,a_cr[n]]).size>0:
-                print "set break here"
-
             cl[n] = cloze
             fnames[n] = fname
 

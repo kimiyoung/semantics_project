@@ -44,8 +44,8 @@ def main(load_path, params, mode='test'):
     m.load_model('%s/best_model.p'%load_path)
 
     # predict among corefs
-    def coref_predictions(preds, ans, corefs, asum, doc, wc):
-        any_acc, rand_acc, freq_acc, long_acc, wc_acc = 0., 0., 0., 0., 0.
+    def coref_predictions(preds, ans, corefs, asum, doc, wc, pas):
+        any_acc, rand_acc, freq_acc, long_acc, wc_acc, as_acc = 0., 0., 0., 0., 0., 0.
         for ii in range(ans.shape[0]):
             ans_tok = np.argwhere(asum[ii,:,ans[ii]])
             pred_tok = np.argwhere(corefs[ii,:,preds[ii]])
@@ -59,13 +59,21 @@ def main(load_path, params, mode='test'):
             long_pred = doc_preds[max_idx]
             (val,counts) = np.unique(doc_preds, return_counts=True)
             freq_pred = val[np.argmax(counts)]
+            coref_cand = [np.argmax(asum[ii,pp,:]) for pp in pred_tok]
+            as_probs = pas[ii,coref_cand]
+            as_pred = np.argmax(as_probs)
+            if coref_cand[as_pred]==ans[ii]: as_acc += 1.
             if long_pred in doc[ii, ans_tok, 0]: long_acc += 1.
             if wc_pred in doc[ii, ans_tok, 0]: wc_acc += 1.
             if freq_pred in doc[ii, ans_tok, 0]: freq_acc += 1.
-            if any(pp in ans_tok for pp in pred_tok): any_acc += 1.
+            if any(pp in ans_tok for pp in pred_tok): 
+                any_acc += 1.
+                if coref_cand[as_pred]!=ans[ii]:
+                    print "break here"
             if rand_tok in ans_tok: rand_acc += 1.
         return (any_acc/ans.shape[0], rand_acc/ans.shape[0], 
-                freq_acc/ans.shape[0], long_acc/ans.shape[0], wc_acc/ans.shape[0])
+                freq_acc/ans.shape[0], long_acc/ans.shape[0], wc_acc/ans.shape[0], 
+                as_acc/ans.shape[0])
 
     print("testing ...")
     pr = np.zeros((len(batch_loader_test.questions),
@@ -76,13 +84,13 @@ def main(load_path, params, mode='test'):
         batch_loader_test.max_doc_len)).astype('float32')
     fids, attns = [], []
     total_loss, total_loss_c, total_acc, total_acc_c, n = 0., 0., 0., 0., 0
-    total_acc_r, total_acc_f, total_acc_l, total_acc_w = 0., 0., 0., 0.
+    total_acc_r, total_acc_f, total_acc_l, total_acc_w, total_acc_a = 0., 0., 0., 0., 0.
     for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, cr, a_cr, fnames in batch_loader_test:
         outs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, cr, a_cr)
         loss, acc, probs, loss_c, acc_c, probs_c, doc_probs = outs[:7]
         ans_c = np.argmax(probs_c,axis=1)
-        acc_c_n, acc_c_r, acc_c_f, acc_c_l, acc_c_w = coref_predictions(ans_c, a, cr, c, dw, 
-            data.word_counts)
+        acc_c_n, acc_c_r, acc_c_f, acc_c_l, acc_c_w, acc_c_a = coref_predictions(ans_c, a, cr, c, dw, 
+            data.word_counts, probs)
 
         bsize = dw.shape[0]
         total_loss += bsize*loss
@@ -93,6 +101,7 @@ def main(load_path, params, mode='test'):
         total_acc_f += bsize*acc_c_f
         total_acc_l += bsize*acc_c_l
         total_acc_w += bsize*acc_c_w
+        total_acc_a += bsize*acc_c_a
 
         pr[n:n+bsize,:] = probs
         pr_c[n:n+bsize,:probs_c.shape[1]] = probs_c
@@ -101,9 +110,9 @@ def main(load_path, params, mode='test'):
         n += bsize
 
     logger = open(load_path+'/log','a',0)
-    message = '%s Loss %.4e coref_loss=%.4e acc=%.4f coref_acc=%.4f rand_coref_acc=%.4f freq_coref_acc=%.4f long_coref_acc=%.4f wc_coref_acc=%.4f' % (mode.upper(), total_loss/n, 
+    message = '%s Loss %.4e coref_loss=%.4e acc=%.4f coref_acc=%.4f rand_coref_acc=%.4f freq_coref_acc=%.4f long_coref_acc=%.4f wc_coref_acc=%.4f as_coref_acc=%.4f' % (mode.upper(), total_loss/n, 
             total_loss_c, total_acc/n, total_acc_c/n, total_acc_r/n, total_acc_f/n, 
-            total_acc_l/n, total_acc_w/n)
+            total_acc_l/n, total_acc_w/n, total_acc_a/n)
     print message
     logger.write(message+'\n')
     logger.close()
