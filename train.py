@@ -6,6 +6,7 @@ import shutil
 from config import *
 from model import GAReader, GAReaderpp_prior, StanfordAR, GAReaderpp, GAReaderppp
 from model import DeepASReader, DeepAoAReader
+from model import GAReaderCoref
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 def main(save_path, params):
@@ -66,9 +67,9 @@ def main(save_path, params):
         new_max = False
 
         for (dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, 
-                cl, cr, a_cr, fnames) in batch_loader_train:
+                cl, cr, a_cr, ci, fnames) in batch_loader_train:
             loss, tr_acc, probs, loss_c, tr_acc_c, probs_c = m.train(dw, dt, qw, qt, c, a, m_dw, 
-                    m_qw, tt, tm, m_c, cl, cr, a_cr)
+                    m_qw, tt, tm, m_c, cl, cr, a_cr, ci)
 
             if np.isnan(loss_c).any():
                 print "break here"
@@ -82,9 +83,9 @@ def main(save_path, params):
                 total_loss, total_loss_c, total_acc, total_acc_c, n, n_cand = 0., 0., 0., 0., 0, 0.
 
                 for (dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, 
-                        cl, cr, a_cr, fnames) in batch_loader_val:
+                        cl, cr, a_cr, ci, fnames) in batch_loader_val:
                     outs = m.validate(dw, dt, qw, qt, c, a, 
-                            m_dw, m_qw, tt, tm, m_c, cl, cr, a_cr)
+                            m_dw, m_qw, tt, tm, m_c, cl, cr, a_cr, ci)
                     loss, acc, probs, loss_c, acc_c, probs_c, doc_probs = outs[:7]
                     ans_c = np.argmax(probs_c,axis=1)
                     acc_c_n = 0.

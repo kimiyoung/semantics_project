@@ -9,7 +9,7 @@ from config import get_params
 
 # parse arguments
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--model', dest='model', type=str, default='GAReaderpp',
+parser.add_argument('--model', dest='model', type=str, default='GAReaderCoref',
         help='base model - (GAReader || GAReaderpp || StanfordAR || DeepASReader)')
 parser.add_argument('--mode', dest='mode', type=int, default=0,
         help='run mode - (0-train+test, 1-train only, 2-test only, 3-val only)')

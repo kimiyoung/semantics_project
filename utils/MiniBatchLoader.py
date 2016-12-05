@@ -2,7 +2,7 @@ import glob
 import numpy as np
 import random
 
-from config import MAX_WORD_LEN
+from config import MAX_WORD_LEN, MAX_COREF_CHAINS
 
 class MiniBatchLoader():
 
@@ -80,6 +80,8 @@ class MiniBatchLoader():
         cr = np.zeros((curr_batch_size, curr_max_doc_len, curr_max_doc_len),
                 dtype='int32') # coref aggragator
         cl = np.zeros((curr_batch_size,), dtype='int32') # position of cloze in query
+        ci = np.zeros((curr_batch_size, curr_max_doc_len, MAX_COREF_CHAINS),
+                dtype='int8') # coref indicators
 
         m_dw = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32')  # document word mask
         m_qw = np.zeros((curr_batch_size, self.max_qry_len), dtype='int32')  # query word mask
@@ -126,8 +128,13 @@ class MiniBatchLoader():
             tracker = set(range(len(doc_w)))
             ic = 0
             for it in range(len(doc_w)):
+                chain_ids = [jj for jj,chain in enumerate(coref) if it in chain]
+                if chain_ids:
+                    assert max(chain_ids)<MAX_COREF_CHAINS, ("more than MAX_COREF_CHAINS %s" 
+                            % fname)
+                    ci[n,it,chain_ids] = 1
                 if it not in tracker: continue
-                chains = set([it]).union(*[chain for chain in coref if it in chain])
+                chains = set([it]).union(*[coref[chc] for chc in chain_ids])
                 cr[n,list(chains),ic] = 1
                 tracker = tracker.difference(chains)
                 if any(aa in chains for aa in ans_idx): 
@@ -154,7 +161,7 @@ class MiniBatchLoader():
 
         self.ptr += 1
 
-        return dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, cr, a_cr, fnames
+        return dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, cr, a_cr, ci, fnames
 
 def unit_test(mini_batch_loader):
     """unit test to validate MiniBatchLoader using max-frequency (exclusive).

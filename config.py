@@ -12,6 +12,8 @@ NUM_EPOCHS = 10
 VALIDATION_FREQ = 100
 # maximum word length for character model
 MAX_WORD_LEN = 10
+# maximum number of coref chains
+MAX_COREF_CHAINS = 12
 
 # dataset params
 def get_params(dataset):

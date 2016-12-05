@@ -6,6 +6,7 @@ import shutil
 from config import *
 from model import GAReader, GAReaderpp_prior, StanfordAR, GAReaderpp, GAReaderppp
 from model import DeepASReader, DeepAoAReader
+from model import GAReaderCoref
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 def main(load_path, params, mode='test'):
@@ -85,8 +86,9 @@ def main(load_path, params, mode='test'):
     fids, attns = [], []
     total_loss, total_loss_c, total_acc, total_acc_c, n = 0., 0., 0., 0., 0
     total_acc_r, total_acc_f, total_acc_l, total_acc_w, total_acc_a = 0., 0., 0., 0., 0.
-    for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, cr, a_cr, fnames in batch_loader_test:
-        outs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, cr, a_cr)
+    for (dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, 
+            cl, cr, a_cr, ci, fnames) in batch_loader_test:
+        outs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, cr, a_cr, ci)
         loss, acc, probs, loss_c, acc_c, probs_c, doc_probs = outs[:7]
         ans_c = np.argmax(probs_c,axis=1)
         acc_c_n, acc_c_r, acc_c_f, acc_c_l, acc_c_w, acc_c_a = coref_predictions(ans_c, a, cr, c, dw, 
