@@ -179,10 +179,10 @@ class Model:
             l_m = PairwiseInteractionLayer([l_doce,l_qembed])
             attentions.append(L.get_output(l_m, deterministic=True))
 
-        # concatenate coref indicators
-        l_doce = L.ConcatLayer([l_doce, l_corefin], axis=2)
-
         for i in range(K-1):
+            # concatenate coref indicators
+            l_doce = L.ConcatLayer([l_doce, l_corefin], axis=2)
+
             l_fwd_doc_1 = L.GRULayer(l_doce, self.nhidden, grad_clipping=GRAD_CLIP, 
                     mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True)
             l_bkd_doc_1 = L.GRULayer(l_doce, self.nhidden, grad_clipping=GRAD_CLIP, 

@@ -51,7 +51,7 @@ save_path = ('experiments/'+params['model']+'/'+params['dataset'].split('/')[0]+
         '_train%d'%params['train_emb']+'_subsample%d'%params['subsample']+
         '_seed%d'%params['seed']+'_use-feat%d'%params['use_feat']+
         '_traincut%.1f'%params['train_cut']+'_gf%s'%params['gating_fn']+
-        '_coref%d'%int(params['coref'])+'/')
+        '_coref%d'%int(params['coref'])+'_alllayers/')
 if not os.path.exists(save_path): os.makedirs(save_path)
 
 # train
