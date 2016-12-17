@@ -42,7 +42,7 @@ wdw_params = {
         'char_dim'  :   25,
         'dropout'   :   0.3,
         'word2vec'  :   'word2vec/word2vec_glove.txt',
-        'train_emb' :   1,
+        'train_emb' :   0,
         'use_feat'  :   0,
         }
 

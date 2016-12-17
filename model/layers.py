@@ -24,13 +24,15 @@ class GatedAttentionLayer(L.MergeLayer):
     The mask is for the second tensor.
     """
 
-    def __init__(self, incomings, gating_fn='T.mul', mask_input=None, transpose=False, **kwargs):
+    def __init__(self, incomings, gating_fn='T.mul', mask_input=None, transpose=False, 
+            query_attn=True, **kwargs):
         super(GatedAttentionLayer, self).__init__(incomings, **kwargs)
 	self.gating_fn = gating_fn
         if mask_input is not None and type(mask_input).__name__!='TensorVariable': 
             raise TypeError('Mask input must be theano tensor variable')
         self.mask = mask_input
         self.transpose = transpose
+        self.query_attn = query_attn
 
     def get_output_shape_for(self, input_shapes):
         if self.gating_fn=='Tconcat': 
@@ -51,7 +53,12 @@ class GatedAttentionLayer(L.MergeLayer):
         alphas_r = T.reshape(alphas, (M.shape[0],M.shape[1],M.shape[2]))* \
                 self.mask[:,np.newaxis,:] # B x N x Q
         alphas_r = alphas_r/alphas_r.sum(axis=2)[:,:,np.newaxis] # B x N x Q
-        q_rep = T.batched_dot(alphas_r, inputs[1]) # B x N x D
+        if self.query_attn:
+            q_rep = T.batched_dot(alphas_r, inputs[1]) # B x N x D
+        else:
+            qd = T.concatenate([inputs[1][:,-1,:mid],inputs[1][:,0,mid:]], axis=1) # B x D
+            q_rep = T.reshape(T.tile(qd,(1,inputs[0].shape[1])), 
+                    (inputs[0].shape[0],inputs[0].shape[1],qd.shape[1])) # B x N x D
     
         return eval(self.gating_fn)(inputs[0],q_rep)
 

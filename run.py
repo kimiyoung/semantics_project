@@ -29,6 +29,8 @@ parser.add_argument('--train_cut', dest='train_cut', type=float, default=1.0,
         help='Cut training data size by factor (default - no cut)')
 parser.add_argument('--gating_fn', dest='gating_fn', type=str, default='T.mul',
         help='Gating function (T.mul || Tsum || Tconcat)')
+parser.add_argument('--query_attn', dest='query_attn', type=int, default=1,
+        help='Token specific query attention? (0/1)')
 args = parser.parse_args()
 cmd = vars(args)
 params = get_params(cmd['dataset'])
@@ -45,7 +47,8 @@ save_path = ('experiments/'+params['model']+'/'+params['dataset'].split('/')[0]+
         '_dropout%.1f'%params['dropout']+'_%s'%w2v_filename+'_chardim%d'%params['char_dim']+
         '_train%d'%params['train_emb']+'_subsample%d'%params['subsample']+
         '_seed%d'%params['seed']+'_use-feat%d'%params['use_feat']+
-        '_traincut%.1f'%params['train_cut']+'_gf%s'%params['gating_fn']+'/')
+        '_traincut%.1f'%params['train_cut']+'_gf%s'%params['gating_fn']+
+        '_qattn%s'%params['query_attn']+'/')
 if not os.path.exists(save_path): os.makedirs(save_path)
 
 # train

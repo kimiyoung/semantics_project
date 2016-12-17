@@ -17,7 +17,8 @@ def prepare_input(d,q):
 class Model:
 
     def __init__(self, K, vocab_size, num_chars, W_init, regularizer, rlambda, 
-            nhidden, embed_dim, dropout, train_emb, subsample, char_dim, use_feat, gating_fn, 
+            nhidden, embed_dim, dropout, train_emb, subsample, char_dim, use_feat, 
+            gating_fn, query_attn, 
             save_attn=False):
         self.nhidden = nhidden
         self.embed_dim = embed_dim
@@ -30,6 +31,7 @@ class Model:
         self.use_feat = use_feat
         self.save_attn = save_attn
         self.gating_fn = gating_fn
+        self.query_attn = query_attn
 
         norm = lasagne.regularization.l2 if regularizer=='l2' else lasagne.regularization.l1
         self.use_chars = self.char_dim!=0
@@ -171,7 +173,8 @@ class Model:
             l_m = PairwiseInteractionLayer([l_doc_1, l_q_c_1])
             l_doc_2_in = GatedAttentionLayer([l_doc_1, l_q_c_1, l_m], 
                     gating_fn=self.gating_fn, 
-                    mask_input=self.inps[7])
+                    mask_input=self.inps[7],
+                    query_attn=self.query_attn)
             l_doce = L.dropout(l_doc_2_in, p=self.dropout) # B x N x DE
             if self.save_attn: 
                 attentions.append(L.get_output(l_m, deterministic=True))
