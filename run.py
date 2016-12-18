@@ -31,6 +31,8 @@ parser.add_argument('--gating_fn', dest='gating_fn', type=str, default='T.mul',
         help='Gating function (T.mul || Tsum || Tconcat)')
 parser.add_argument('--query_attn', dest='query_attn', type=int, default=1,
         help='Token specific query attention? (0/1)')
+parser.add_argument('--query_share', dest='query_share', type=int, default=0,
+        help='Share query embeddings across layers? (0/1)')
 args = parser.parse_args()
 cmd = vars(args)
 params = get_params(cmd['dataset'])
@@ -48,7 +50,7 @@ save_path = ('experiments/'+params['model']+'/'+params['dataset'].split('/')[0]+
         '_train%d'%params['train_emb']+'_subsample%d'%params['subsample']+
         '_seed%d'%params['seed']+'_use-feat%d'%params['use_feat']+
         '_traincut%.1f'%params['train_cut']+'_gf%s'%params['gating_fn']+
-        '_qattn%s'%params['query_attn']+'/')
+        '_qattn%s'%params['query_attn']+'_qshare%s'%params['query_share']+'/')
 if not os.path.exists(save_path): os.makedirs(save_path)
 
 # train

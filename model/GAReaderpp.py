@@ -18,7 +18,7 @@ class Model:
 
     def __init__(self, K, vocab_size, num_chars, W_init, regularizer, rlambda, 
             nhidden, embed_dim, dropout, train_emb, subsample, char_dim, use_feat, 
-            gating_fn, query_attn, 
+            gating_fn, query_attn, query_share, 
             save_attn=False):
         self.nhidden = nhidden
         self.embed_dim = embed_dim
@@ -32,6 +32,7 @@ class Model:
         self.save_attn = save_attn
         self.gating_fn = gating_fn
         self.query_attn = query_attn
+        self.query_share = query_share
 
         norm = lasagne.regularization.l2 if regularizer=='l2' else lasagne.regularization.l1
         self.use_chars = self.char_dim!=0
@@ -152,6 +153,13 @@ class Model:
             l_m = PairwiseInteractionLayer([l_doce,l_qembed])
             attentions.append(L.get_output(l_m, deterministic=True))
 
+        l_fwd_q = L.GRULayer(l_qembed, self.nhidden, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
+                gradient_steps=GRAD_STEPS, precompute_input=True, only_return_final=False)
+        l_bkd_q = L.GRULayer(l_qembed, self.nhidden, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
+                gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True, 
+                only_return_final=False)
+        l_q = L.ConcatLayer([l_fwd_q, l_bkd_q], axis=2) # B x Q x 2D
+
         for i in range(K-1):
             l_fwd_doc_1 = L.GRULayer(l_doce, self.nhidden, grad_clipping=GRAD_CLIP, 
                     mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True)
@@ -168,7 +176,10 @@ class Model:
                     mask_input=l_qmask, 
                     gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
 
-            l_q_c_1 = L.ConcatLayer([l_fwd_q_1, l_bkd_q_1], axis=2) # B x Q x DE
+            if self.query_share:
+                l_q_c_1 = l_q
+            else:
+                l_q_c_1 = L.ConcatLayer([l_fwd_q_1, l_bkd_q_1], axis=2) # B x Q x DE
 
             l_m = PairwiseInteractionLayer([l_doc_1, l_q_c_1])
             l_doc_2_in = GatedAttentionLayer([l_doc_1, l_q_c_1, l_m], 
@@ -188,13 +199,6 @@ class Model:
                 mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True, \
                         backwards=True)
         l_doc = L.concat([l_fwd_doc, l_bkd_doc], axis=2)
-
-        l_fwd_q = L.GRULayer(l_qembed, self.nhidden, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
-                gradient_steps=GRAD_STEPS, precompute_input=True, only_return_final=False)
-        l_bkd_q = L.GRULayer(l_qembed, self.nhidden, grad_clipping=GRAD_CLIP, mask_input=l_qmask, 
-                gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True, 
-                only_return_final=False)
-        l_q = L.ConcatLayer([l_fwd_q, l_bkd_q], axis=2) # B x Q x 2D
 
         if self.save_attn:
             l_m = PairwiseInteractionLayer([l_doc, l_q])

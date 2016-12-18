@@ -56,6 +56,7 @@ class GatedAttentionLayer(L.MergeLayer):
         if self.query_attn:
             q_rep = T.batched_dot(alphas_r, inputs[1]) # B x N x D
         else:
+            mid = inputs[1].shape[2]/2
             qd = T.concatenate([inputs[1][:,-1,:mid],inputs[1][:,0,mid:]], axis=1) # B x D
             q_rep = T.reshape(T.tile(qd,(1,inputs[0].shape[1])), 
                     (inputs[0].shape[0],inputs[0].shape[1],qd.shape[1])) # B x N x D

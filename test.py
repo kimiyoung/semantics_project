@@ -24,6 +24,7 @@ def main(load_path, params, mode='test'):
     use_feat = params['use_feat']
     gating_fn = params['gating_fn']
     query_attn = params['query_attn']
+    query_share = params['query_share']
 
     dp = DataPreprocessor.DataPreprocessor()
     data = dp.preprocess(dataset, no_training_set=True)
@@ -39,7 +40,7 @@ def main(load_path, params, mode='test'):
     W_init, embed_dim = Helpers.load_word2vec_embeddings(data.dictionary[0], word2vec)
     m = eval(base_model).Model(nlayers, data.vocab_size, data.num_chars, W_init, 
             regularizer, rlambda, nhidden, embed_dim, dropout, train_emb, subsample, 
-            char_dim, use_feat, gating_fn, query_attn, save_attn=True)
+            char_dim, use_feat, gating_fn, query_attn, query_share, save_attn=True)
     m.load_model('%s/best_model.p'%load_path)
 
     print("testing ...")
