@@ -29,10 +29,6 @@ parser.add_argument('--train_cut', dest='train_cut', type=float, default=1.0,
         help='Cut training data size by factor (default - no cut)')
 parser.add_argument('--gating_fn', dest='gating_fn', type=str, default='T.mul',
         help='Gating function (T.mul || Tsum || Tconcat)')
-parser.add_argument('--coref', dest='coref', action='store_true', 
-        help='link coreferences for attention sum')
-parser.add_argument('--no-coref', dest='coref', action='store_false', 
-        help='do not link coreferences for attention sum')
 parser.set_defaults(coref=False)
 args = parser.parse_args()
 cmd = vars(args)
@@ -44,14 +40,14 @@ random.seed(params['seed'])
 
 # save directory
 w2v_filename = params['word2vec'].split('/')[-1].split('.')[0] if params['word2vec'] else 'None'
-save_path = ('experiments/'+params['model']+'/'+params['dataset'].split('/')[0]+
+save_path = ('crfreader_experiments_v2/'+params['model']+'/'+params['dataset'].split('/')[0]+
         '/reg%s'%params['regularizer']+
         '%.3f'%params['lambda']+'_nhid%d'%params['nhidden']+'_nlayers%d'%params['nlayers']+
         '_dropout%.1f'%params['dropout']+'_%s'%w2v_filename+'_chardim%d'%params['char_dim']+
         '_train%d'%params['train_emb']+'_subsample%d'%params['subsample']+
         '_seed%d'%params['seed']+'_use-feat%d'%params['use_feat']+
         '_traincut%.1f'%params['train_cut']+'_gf%s'%params['gating_fn']+
-        '_coref%d'%int(params['coref'])+'/')
+        '_corefdim%d'%params['coref_dim']+'/')
 if not os.path.exists(save_path): os.makedirs(save_path)
 
 # train

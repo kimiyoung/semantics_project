@@ -24,7 +24,8 @@ def main(save_path, params):
     use_feat = params['use_feat']
     train_cut = params['train_cut']
     gating_fn = params['gating_fn']
-    coref = params['coref']
+    numcoref = params['num_coref']
+    corefdim = params['coref_dim']
 
     # save settings
     shutil.copyfile('config.py','%s/config.py'%save_path)
@@ -42,7 +43,7 @@ def main(save_path, params):
     W_init, embed_dim, = Helpers.load_word2vec_embeddings(data.dictionary[0], word2vec)
     m = eval(base_model).Model(nlayers, data.vocab_size, data.num_chars, W_init, 
             regularizer, rlambda, nhidden, embed_dim, dropout, train_emb, subsample, 
-            char_dim, use_feat, gating_fn, coref)
+            char_dim, use_feat, gating_fn, numcoref, corefdim)
 
     print("training ...")
     num_iter = 0
@@ -66,55 +67,37 @@ def main(save_path, params):
         new_max = False
 
         for (dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, 
-                cl, cr, a_cr, fnames) in batch_loader_train:
-            loss, tr_acc, probs, loss_c, tr_acc_c, probs_c = m.train(dw, dt, qw, qt, c, a, m_dw, 
-                    m_qw, tt, tm, m_c, cl, cr, a_cr)
+                cl, cr, fnames) in batch_loader_train:
+            loss, tr_acc, probs = m.train(dw, dt, qw, qt, c, a, m_dw, 
+                    m_qw, tt, tm, m_c, cl, cr)
 
-            if np.isnan(loss_c).any():
-                print "break here"
-            message = "Epoch %d TRAIN loss=%.4e coref_loss=%.4e acc=%.4f coref_acc=%.4f elapsed=%.1f" % (
-                    epoch, loss, loss_c, tr_acc, tr_acc_c, time.time()-estart)
+            message = "Epoch %d TRAIN loss=%.4e acc=%.4f elapsed=%.1f" % (
+                    epoch, loss, tr_acc, time.time()-estart)
             print message
             logger.write(message+'\n')
 
             num_iter += 1
             if num_iter % VALIDATION_FREQ == 0:
-                total_loss, total_loss_c, total_acc, total_acc_c, n, n_cand = 0., 0., 0., 0., 0, 0.
+                total_loss, total_acc, n, n_cand = 0., 0., 0., 0.
 
                 for (dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, 
-                        cl, cr, a_cr, fnames) in batch_loader_val:
+                        cl, cr, fnames) in batch_loader_val:
                     outs = m.validate(dw, dt, qw, qt, c, a, 
-                            m_dw, m_qw, tt, tm, m_c, cl, cr, a_cr)
-                    loss, acc, probs, loss_c, acc_c, probs_c, doc_probs = outs[:7]
-                    ans_c = np.argmax(probs_c,axis=1)
-                    acc_c_n = 0.
-                    for ii in range(ans_c.shape[0]):
-                        ans_tok = np.argwhere(c[ii,:,a[ii]])
-                        pred_tok = np.argwhere(cr[ii,:,ans_c[ii]])
-                        if any(pp in ans_tok for pp in pred_tok): acc_c_n += 1.
-                    acc_c_n = acc_c_n/ans_c.shape[0]
+                            m_dw, m_qw, tt, tm, m_c, cl, cr)
+                    loss, acc, probs, doc_probs = outs[:4]
 
                     bsize = dw.shape[0]
                     total_loss += bsize*loss
-                    total_loss_c += bsize*loss_c
                     total_acc += bsize*acc
-                    total_acc_c += bsize*acc_c_n
                     n += bsize
 
 		val_acc = total_acc/n
                 if val_acc > max_acc:
                     max_acc = val_acc
-                    if not coref:
-                        m.save_model('%s/best_model.p'%save_path)
-                        new_max = True
-                val_acc_c = total_acc_c/n
-                if val_acc_c > max_acc_c:
-                    max_acc_c = val_acc_c
-                    if coref:
-                        m.save_model('%s/best_model.p'%save_path)
-                        new_max = True
-                message = "Epoch %d VAL loss=%.4e coref_loss=%.4e acc=%.4f coref_acc=%.4f max_acc=%.4f coref_max_acc=%.4f" % (
-                    epoch, total_loss/n, total_loss_c/n, val_acc, val_acc_c, max_acc, max_acc_c)
+                    m.save_model('%s/best_model.p'%save_path)
+                    new_max = True
+                message = "Epoch %d VAL loss=%.4e acc=%.4f max_acc=%.4f" % (
+                    epoch, total_loss/n, val_acc, max_acc)
                 print message
                 logger.write(message+'\n')
 

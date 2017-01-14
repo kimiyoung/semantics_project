@@ -77,8 +77,7 @@ class MiniBatchLoader():
         qw = np.zeros((curr_batch_size, self.max_qry_len, 1), dtype='int32') # query words
         c = np.zeros((curr_batch_size, curr_max_doc_len, self.max_num_cand), 
                 dtype='int32')   # candidate answers
-        cr = np.zeros((curr_batch_size, curr_max_doc_len, curr_max_doc_len),
-                dtype='int32') # coref aggragator
+        cr = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32') # coref id
         cl = np.zeros((curr_batch_size,), dtype='int32') # position of cloze in query
 
         m_dw = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32')  # document word mask
@@ -86,7 +85,6 @@ class MiniBatchLoader():
         m_c = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32') # candidate mask
 
         a = np.zeros((curr_batch_size, ), dtype='int32')    # correct answer
-        a_cr = np.zeros((curr_batch_size, ), dtype='int32')    # correct answer
         fnames = ['']*curr_batch_size
 
         types = {}
@@ -122,18 +120,9 @@ class MiniBatchLoader():
                     a[n] = it # answer
             assert ans_idx, "answer index in doc empty! %s" % fname
 
-            # build coref aggragtor
-            tracker = set(range(len(doc_w)))
-            ic = 0
-            for it in range(len(doc_w)):
-                if it not in tracker: continue
-                chains = set([it]).union(*[chain for chain in coref if it in chain])
-                cr[n,list(chains),ic] = 1
-                tracker = tracker.difference(chains)
-                if any(aa in chains for aa in ans_idx): 
-                    assert chains, "answer set to empty index. %s" % fname
-                    a_cr[n] = ic
-                ic += 1
+            # build coref index 
+            for ic, chain in enumerate(coref):
+                cr[n,list(chain)] = ic+1
 
             cl[n] = cloze
             fnames[n] = fname
@@ -154,7 +143,7 @@ class MiniBatchLoader():
 
         self.ptr += 1
 
-        return dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, cr, a_cr, fnames
+        return dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, cr, fnames
 
 def unit_test(mini_batch_loader):
     """unit test to validate MiniBatchLoader using max-frequency (exclusive).

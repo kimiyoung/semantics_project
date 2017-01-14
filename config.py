@@ -78,12 +78,14 @@ cbtne_params = {
         }
 
 lambada_params = {
-        'nhidden'   :   256,
+        'nhidden'   :   224,
         'char_dim'  :   0,
         'dropout'   :   0.2,
         'word2vec'  :   'word2vec/word2vec_glove.txt',
         'train_emb' :   1,
         'use_feat'  :   0,
+        'num_coref' :   12,
+        'coref_dim' :   32,
         }
 
 debug_params = {
@@ -93,4 +95,6 @@ debug_params = {
         'word2vec'  :   None,
         'train_emb' :   1,
         'use_feat'  :   0,
+        'num_coref' :   12,
+        'coref_dim' :   2,
         }
