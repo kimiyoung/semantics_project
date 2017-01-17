@@ -27,7 +27,7 @@ def get_params(dataset):
         return cbtne_params
     elif dataset=='lambada':
         return lambada_params
-    elif dataset=='debug':
+    elif dataset=='debug' or dataset=='wdw_debug':
         return debug_params
     else:
         raise ValueError("Dataset %s not found"%dataset)
@@ -46,8 +46,10 @@ wdw_params = {
         'char_dim'  :   25,
         'dropout'   :   0.3,
         'word2vec'  :   'word2vec/word2vec_glove.txt',
-        'train_emb' :   1,
-        'use_feat'  :   0,
+        'train_emb' :   0,
+        'use_feat'  :   1,
+        'num_coref' :   76,
+        'coref_dim' :   0,
         }
 
 cnn_params = {
@@ -95,6 +97,6 @@ debug_params = {
         'word2vec'  :   None,
         'train_emb' :   1,
         'use_feat'  :   0,
-        'num_coref' :   12,
+        'num_coref' :   76,
         'coref_dim' :   2,
         }

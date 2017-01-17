@@ -30,8 +30,8 @@ class DataPreprocessor:
         the training set will be left out (to save debugging time) when no_training_set
         is True.
         """
-        vocab_f = os.path.join(question_dir,"vocab.txt")
-        wc_f = os.path.join(question_dir,"wc.npy")
+        vocab_f = os.path.join(question_dir,"vocab_coref.txt")
+        wc_f = os.path.join(question_dir,"wc_coref.npy")
         word_dictionary, char_dictionary, num_entities = \
                 self.make_dictionary(question_dir, vocab_file=vocab_f)
         word_counts = self.word_count(question_dir, word_dictionary, wc_f)
@@ -40,13 +40,13 @@ class DataPreprocessor:
             training = None
         else:
             print "preparing training data ..."
-            training = self.parse_all_files(question_dir + "/training", 
+            training = self.parse_all_files(question_dir + "/training_coref", 
                     dictionary, use_chars)
         print "preparing validation data ..."
-        validation = self.parse_all_files(question_dir + "/validation", 
+        validation = self.parse_all_files(question_dir + "/validation_coref", 
                 dictionary, use_chars)
         print "preparing test data ..."
-        test = self.parse_all_files(question_dir + "/test", dictionary, use_chars)
+        test = self.parse_all_files(question_dir + "/test_coref", dictionary, use_chars)
 
         data = Data(dictionary, num_entities, training, validation, test, word_counts)
         return data
@@ -78,9 +78,9 @@ class DataPreprocessor:
                 f.close()
             else:
                 fnames = []
-                fnames += glob.glob(question_dir + "/test" + "/*.question")
-                fnames += glob.glob(question_dir + "/validation" + "/*.question")
-                fnames += glob.glob(question_dir + "/training" + "/*.question")
+                fnames += glob.glob(question_dir + "/test_coref" + "/*.question")
+                fnames += glob.glob(question_dir + "/validation_coref" + "/*.question")
+                fnames += glob.glob(question_dir + "/training_coref" + "/*.question")
 
                 n = 0.
                 for fname in fnames:
@@ -125,9 +125,9 @@ class DataPreprocessor:
                 f.close()
             else:
                 fnames = []
-                fnames += glob.glob(question_dir + "/test" + "/*.question")
-                fnames += glob.glob(question_dir + "/validation" + "/*.question")
-                fnames += glob.glob(question_dir + "/training" + "/*.question")
+                fnames += glob.glob(question_dir + "/test_coref" + "/*.question")
+                fnames += glob.glob(question_dir + "/validation_coref" + "/*.question")
+                fnames += glob.glob(question_dir + "/training_coref" + "/*.question")
 
                 n = 0.
                 for fname in fnames:
@@ -147,10 +147,10 @@ class DataPreprocessor:
                     if n % 10000 == 0:
                         print '%3d%%' % int(100*n/len(fnames))
 
-            entities = set(e for e in vocab_set.keys() if e.startswith('@entity'))
+            entities = set(e for e in vocab_set if e.startswith('@entity'))
 
             # @placehoder, @begin and @end are included in the vocabulary list
-            tokens = set(vocab_set.keys()).difference(entities)
+            tokens = vocab_set.difference(entities)
             tokens.add(SYMB_BEGIN)
             tokens.add(SYMB_END)
 
@@ -210,27 +210,32 @@ class DataPreprocessor:
         """
         w_dict, c_dict = dictionary[0], dictionary[1]
         raw = open(fname).readlines()
-        doc_raw = raw[2].split() # document
-        qry_raw = raw[4].split() # query
-        ans_raw = raw[6].strip() # answer
-
-        # candidates and corefs
-        def _parse_coref(line):
-            all_tokens = [mi for m in line.strip().split('\t') for mi in m.split()]
-            return set([int(t.rsplit(':',1)[1])-1 for t in all_tokens])
         try:
-            # corefs
-            split = raw[8:].index('\n')
-            cand_raw = map(lambda x:x.strip().split(':')[0].split(), 
-                    raw[8:8+split]) # candidate answers
-            coref = [_parse_coref(line) for line in raw[9+split:]]
-        except ValueError:
-            # no corefs
-            cand_raw = map(lambda x:x.strip().split(':')[0].split(), 
-                    raw[8:]) # candidate answers
-            coref = []
-        if not any(aa in doc_raw for aa in ans_raw.split()):
-            print "answer not in doc %s" % fname
+            doc_raw = raw[2].split() # document
+            qry_raw = raw[4].split() # query
+            ans_raw = raw[6].strip().split(':')[0] # answer
+
+            # candidates and corefs
+            def _parse_coref(line):
+                all_tokens = filter(lambda x:x, [mi for m in line.split() 
+                    for mi in m.split('|')])
+                return set([int(t.rsplit(':',1)[1])-1 for t in all_tokens])
+            try:
+                # corefs
+                split = raw[8:].index('\n')
+                cand_raw = map(lambda x:x.strip().split(':')[0].split(), 
+                        raw[8:8+split]) # candidate answers
+                coref = [_parse_coref(line.rstrip()) for line in raw[9+split:]]
+            except ValueError:
+                # no corefs
+                cand_raw = map(lambda x:x.strip().split(':')[0].split(), 
+                        raw[8:]) # candidate answers
+                coref = []
+            if not any(aa in doc_raw for aa in ans_raw.split()):
+                print "answer not in doc %s" % fname
+                return None
+        except IndexError:
+            print "something wrong in ", fname
             return None
 
         return self.process_question(doc_raw, qry_raw, ans_raw, cand_raw, w_dict, c_dict,
