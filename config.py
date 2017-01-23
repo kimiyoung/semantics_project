@@ -7,7 +7,7 @@ LEARNING_RATE = 0.0005
 # Maximum number of steps in BPTT
 GRAD_STEPS = -1
 # Number of epochs for training
-NUM_EPOCHS = 10
+NUM_EPOCHS = 30
 # do validation every VALIDATION_FREQ iterations
 VALIDATION_FREQ = 100
 # maximum word length for character model
@@ -27,6 +27,10 @@ def get_params(dataset):
         return cbtne_params
     elif dataset=='lambada':
         return lambada_params
+    elif dataset=='babi':
+        return babi_params
+    elif dataset=='babi-clean':
+        return babiclean_params
     elif dataset=='debug' or dataset=='wdw_debug':
         return debug_params
     else:
@@ -88,6 +92,28 @@ lambada_params = {
         'use_feat'  :   0,
         'num_coref' :   12,
         'coref_dim' :   32,
+        }
+
+babi_params = {
+        'nhidden'   :   128,
+        'char_dim'  :   0,
+        'dropout'   :   0.3,
+        'word2vec'  :   None,
+        'train_emb' :   1,
+        'use_feat'  :   0,
+        'num_coref' :   4,
+        'coref_dim' :   16,
+        }
+
+babiclean_params = {
+        'nhidden'   :   112,
+        'char_dim'  :   0,
+        'dropout'   :   0.3,
+        'word2vec'  :   None,
+        'train_emb' :   1,
+        'use_feat'  :   0,
+        'num_coref' :   4,
+        'coref_dim' :   16,
         }
 
 debug_params = {

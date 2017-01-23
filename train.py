@@ -107,10 +107,10 @@ def main(save_path, params):
         logger.write(message+'\n')
         
         # learning schedule
-        if epoch >=2:
+        if epoch >=2 and epoch%4==0:
             m.anneal()
         # stopping criterion
-        if not new_max:
-            break
+        #if not new_max:
+        #    break
 
     logger.close()
