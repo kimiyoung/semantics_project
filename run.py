@@ -5,7 +5,7 @@ import os
 import numpy as np
 import random
 
-from config import get_params
+from config import *
 
 # parse arguments
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -41,14 +41,22 @@ random.seed(params['seed'])
 # save directory
 w2v_filename = params['word2vec'].split('/')[-1].split('.')[0] if params['word2vec'] else 'None'
 save_path = ('crfreader_experiments_v2/'+params['model']+'/'+params['dataset'].split('/')[0]+
-        '/reg%s'%params['regularizer']+
-        '%.3f'%params['lambda']+'_nhid%d'%params['nhidden']+'_nlayers%d'%params['nlayers']+
+        '/m'+
+        '_lr%.4f'%LEARNING_RATE+
+        '_bsize%d'%BATCH_SIZE+
+        '_anneal%d'%ANNEAL+
+        '_stop%d'%int(STOPPING)+
+        #'reg%s'%params['regularizer']+
+        #'%.3f'%params['lambda']+
+        '_nhid%d'%params['nhidden']+'_nlayers%d'%params['nlayers']+
         '_dropout%.1f'%params['dropout']+'_%s'%w2v_filename+'_chardim%d'%params['char_dim']+
-        '_train%d'%params['train_emb']+'_subsample%d'%params['subsample']+
+        '_train%d'%params['train_emb']+
+        #'_subsample%d'%params['subsample']+
         '_seed%d'%params['seed']+'_use-feat%d'%params['use_feat']+
-        '_traincut%.1f'%params['train_cut']+'_gf%s'%params['gating_fn']+
+        #'_traincut%.1f'%params['train_cut']+'_gf%s'%params['gating_fn']+
         '_corefdim%d'%params['coref_dim']+'/')
 if not os.path.exists(save_path): os.makedirs(save_path)
+else: sys.exit()
 
 # train
 if params['mode']<2:

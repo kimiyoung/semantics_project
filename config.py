@@ -3,7 +3,7 @@ BATCH_SIZE = 32
 # Gradient clip threshold
 GRAD_CLIP = 10
 # Learning rate
-LEARNING_RATE = 0.0005
+LEARNING_RATE = 0.01
 # Maximum number of steps in BPTT
 GRAD_STEPS = -1
 # Number of epochs for training
@@ -12,6 +12,10 @@ NUM_EPOCHS = 30
 VALIDATION_FREQ = 100
 # maximum word length for character model
 MAX_WORD_LEN = 10
+# annealing every x epochs
+ANNEAL = 4
+# early stopping
+STOPPING = False
 
 # dataset params
 def get_params(dataset):
@@ -27,7 +31,7 @@ def get_params(dataset):
         return cbtne_params
     elif dataset=='lambada':
         return lambada_params
-    elif dataset=='babi':
+    elif dataset=='babi' or dataset=='babi-3-1k-pcrf' or dataset=='babi-3-1k-orig':
         return babi_params
     elif dataset=='babi-clean':
         return babiclean_params
@@ -95,14 +99,14 @@ lambada_params = {
         }
 
 babi_params = {
-        'nhidden'   :   128,
+        'nhidden'   :   32,
         'char_dim'  :   0,
-        'dropout'   :   0.3,
+        'dropout'   :   0.1,
         'word2vec'  :   None,
         'train_emb' :   1,
         'use_feat'  :   0,
         'num_coref' :   4,
-        'coref_dim' :   16,
+        'coref_dim' :   32,
         }
 
 babiclean_params = {
