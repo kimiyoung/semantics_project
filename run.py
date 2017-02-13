@@ -4,12 +4,13 @@ import argparse
 import os
 import numpy as np
 import random
+import sys
 
 from config import *
 
 # parse arguments
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--model', dest='model', type=str, default='GAReaderpp',
+parser.add_argument('--model', dest='model', type=str, default='GAKnowledge',
         help='base model - (GAReader || GAReaderpp || StanfordAR || DeepASReader)')
 parser.add_argument('--mode', dest='mode', type=int, default=0,
         help='run mode - (0-train+test, 1-train only, 2-test only, 3-val only)')
@@ -40,7 +41,7 @@ random.seed(params['seed'])
 
 # save directory
 w2v_filename = params['word2vec'].split('/')[-1].split('.')[0] if params['word2vec'] else 'None'
-save_path = ('crfreader_experiments_v2/'+params['model']+'/'+params['dataset'].split('/')[0]+
+save_path = ('crfreader_experiments_v3/'+params['model']+'/'+params['dataset'].split('/')[0]+
         '/m'+
         '_lr%.4f'%LEARNING_RATE+
         '_bsize%d'%BATCH_SIZE+

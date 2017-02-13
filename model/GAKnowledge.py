@@ -7,7 +7,7 @@ import cPickle as pickle
 from config import *
 from tools import sub_sample
 from layers import *
-from lasagne_layers_v2 import *
+from lasagne_layers_v3 import *
 
 def prepare_input(d,q):
     f = np.zeros(d.shape[:2]).astype('int32')
@@ -32,7 +32,6 @@ class Model:
         self.numcoref = params['num_coref']
         rlambda = params['lambda']
         K = params['nlayers']
-        self.corefdim = params['coref_dim']
 
         norm = lasagne.regularization.l2 if params['regularizer']=='l2' else lasagne.regularization.l1
         self.use_chars = self.char_dim!=0
@@ -160,59 +159,44 @@ class Model:
             l_m = PairwiseInteractionLayer([l_doce,l_qembed])
             attentions.append(L.get_output(l_m, deterministic=True))
 
-        for i in range(K-1):
+        for i in range(K):
             if self.use_feat and i==K-1: 
                 l_doce = L.ConcatLayer([l_doce, l_fembed], axis=2) # B x N x DE+2
 
             # forward
             l_fwd_doc = CorefGRULayer([l_doce,l_coref_doc], 
-                self.nhidden, self.corefdim, self.numcoref, grad_clipping=GRAD_CLIP, 
+                self.nhidden, self.numcoref, grad_clipping=GRAD_CLIP, 
                 mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True)
             l_fwd_doc_1 = L.SliceLayer(l_fwd_doc, 
                     indices=slice(0,-(self.numcoref+1)), axis=1)
-            if self.corefdim>0:
-                l_fwd_coref = L.SliceLayer(l_fwd_doc,
-                        indices=slice(-(self.numcoref+1),None), axis=1)
-                l_fwd_coref = L.SliceLayer(l_fwd_coref,
-                        indices=slice(self.nhidden,None), axis=2)
-                l_fwd_q = CorefGRULayer([l_qembed,l_coref_qry], 
-                        self.nhidden, self.corefdim, self.numcoref,
-                        hid_init_slow=l_fwd_coref,
-                        grad_clipping=GRAD_CLIP, 
-                        mask_input=l_qmask, 
-                        gradient_steps=GRAD_STEPS, precompute_input=True)
-            else:
-                l_fwd_q = CorefGRULayer([l_qembed,l_coref_qry], 
-                        self.nhidden, self.corefdim, self.numcoref,
-                        grad_clipping=GRAD_CLIP, 
-                        mask_input=l_qmask, 
-                        gradient_steps=GRAD_STEPS, precompute_input=True)
+            l_fwd_coref = L.SliceLayer(l_fwd_doc,
+                    indices=slice(-(self.numcoref+1),None), axis=1)
+            l_fwd_q = CorefGRULayer([l_qembed,l_coref_qry], 
+                    self.nhidden, self.numcoref,
+                    hid_init_slow=l_fwd_coref,
+                    grad_clipping=GRAD_CLIP, 
+                    mask_input=l_qmask, 
+                    gradient_steps=GRAD_STEPS, precompute_input=True)
             l_fwd_q_1 = L.SliceLayer(l_fwd_q, 
                     indices=slice(0,-(self.numcoref+1)), axis=1)
+            l_fwd_coref = L.SliceLayer(l_fwd_q,
+                    indices=slice(-(self.numcoref+1),None), axis=1)
 
             # backward
             l_bkd_q = CorefGRULayer([l_qembed,l_coref_qry], 
-                    self.nhidden, self.corefdim, self.numcoref,
+                    self.nhidden, self.numcoref,
                     grad_clipping=GRAD_CLIP, 
                     mask_input=l_qmask, 
                     gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
             l_bkd_q_1 = L.SliceLayer(l_bkd_q, 
                     indices=slice(0,-(self.numcoref+1)), axis=1)
-            if self.corefdim>0:
-                l_bkd_coref = L.SliceLayer(l_bkd_q,
-                        indices=slice(-(self.numcoref+1),None), axis=1)
-                l_bkd_coref = L.SliceLayer(l_bkd_coref,
-                        indices=slice(self.nhidden,None), axis=2)
-                l_bkd_doc = CorefGRULayer([l_doce,l_coref_doc],
-                    self.nhidden, self.corefdim, self.numcoref, grad_clipping=GRAD_CLIP, 
-                    hid_init_slow=l_bkd_coref,
-                    mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True,
-                    backwards=True)
-            else:
-                l_bkd_doc = CorefGRULayer([l_doce,l_coref_doc],
-                    self.nhidden, self.corefdim, self.numcoref, grad_clipping=GRAD_CLIP, 
-                    mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True,
-                    backwards=True)
+            l_bkd_coref = L.SliceLayer(l_bkd_q,
+                    indices=slice(-(self.numcoref+1),None), axis=1)
+            l_bkd_doc = CorefGRULayer([l_doce,l_coref_doc],
+                self.nhidden, self.numcoref, grad_clipping=GRAD_CLIP, 
+                hid_init_slow=l_bkd_coref,
+                mask_input=l_docmask, gradient_steps=GRAD_STEPS, precompute_input=True,
+                backwards=True)
             l_bkd_doc_1 = L.SliceLayer(l_bkd_doc, 
                     indices=slice(0,-(self.numcoref+1)), axis=1)
 

@@ -180,6 +180,7 @@ class Model:
                         hid_init_slow=l_fwd_coref,
                         grad_clipping=GRAD_CLIP, 
                         mask_input=l_qmask, 
+                        propagate_nocoref=True,
                         gradient_steps=GRAD_STEPS, precompute_input=True)
             else:
                 l_fwd_q = CorefGRULayer([l_qembed,l_coref_qry], 
@@ -195,6 +196,7 @@ class Model:
                     self.nhidden, self.corefdim, self.numcoref,
                     grad_clipping=GRAD_CLIP, 
                     mask_input=l_qmask, 
+                    propagate_nocoref=True,
                     gradient_steps=GRAD_STEPS, precompute_input=True, backwards=True)
             l_bkd_q_1 = L.SliceLayer(l_bkd_q, 
                     indices=slice(0,-(self.numcoref+1)), axis=1)

@@ -15,7 +15,7 @@ from lasagne.updates import sgd
 
 class CorefGRULayer(MergeLayer):
     r"""
-    lasagne.layers.recurrent.GRULayer(incomings, num_units_fast, num_units_slow, 
+    lasagne.layers.recurrent.GRULayer(incomings, num_units,
     resetgate=lasagne.layers.Gate(W_cell=None),
     updategate=lasagne.layers.Gate(W_cell=None),
     hidden_update=lasagne.layers.Gate(
@@ -27,7 +27,7 @@ class CorefGRULayer(MergeLayer):
     Gated Recurrent Unit (GRU) Layer with explicit Coref states
 
     """
-    def __init__(self, incomings, num_units_fast, num_units_slow, num_coref,
+    def __init__(self, incomings, num_units, num_coref,
                  resetgate=Gate(W_cell=None),
                  updategate=Gate(W_cell=None),
                  hidden_update=Gate(W_cell=None,
@@ -42,13 +42,11 @@ class CorefGRULayer(MergeLayer):
                  precompute_input=True,
                  mask_input=None,
                  only_return_final=False,
-                 propagate_nocoref=False,
                  **kwargs):
 
         # This layer inherits from a MergeLayer, because it can have four 
-        # inputs - the layer input, the mask, the corefs, and the initial hidden state
-        # (for fast moving layer, initial hidden state is 0 for the slow layers).  We
-        # will provide the layer input and corefs as incomings, and a mask input
+        # inputs - the layer input, the mask, the corefs, and the initial hidden states
+        # We will provide the layer input and corefs as incomings, and a mask input
         # or initial hidden state can be provided separately
         self.mask_incoming_index = -1
         self.hid_init_incoming_index = -1
@@ -67,9 +65,7 @@ class CorefGRULayer(MergeLayer):
         super(CorefGRULayer, self).__init__(incomings, **kwargs)
 
         self.learn_init = learn_init
-        self.num_units_fast = num_units_fast
-        self.num_units_slow = num_units_slow
-        self.num_units = self.num_units_fast+self.num_units_slow
+        self.num_units = num_units
         self.num_coref = num_coref
         self.grad_clipping = grad_clipping
         self.backwards = backwards
@@ -77,7 +73,6 @@ class CorefGRULayer(MergeLayer):
         self.unroll_scan = unroll_scan
         self.precompute_input = precompute_input
         self.only_return_final = only_return_final
-        self.propagate_nocoref = propagate_nocoref
 
         if unroll_scan and gradient_steps != -1:
             raise ValueError(
@@ -96,12 +91,12 @@ class CorefGRULayer(MergeLayer):
         def add_gate_params(gate, gate_name):
             """ Convenience function for adding layer parameters from a Gate
             instance. """
-            return (self.add_param(gate.W_in, (num_inputs, num_units_fast+num_units_slow),
+            return (self.add_param(gate.W_in, (num_inputs, num_units),
                                    name="W_in_to_{}".format(gate_name)),
-                    self.add_param(gate.W_hid, (num_units_fast+num_units_slow, 
-                        num_units_fast+num_units_slow),
+                    # hidden state will be concatenation of local and coref states
+                    self.add_param(gate.W_hid, (2*num_units, num_units),
                                    name="W_hid_to_{}".format(gate_name)),
-                    self.add_param(gate.b, (num_units_fast+num_units_slow,),
+                    self.add_param(gate.b, (num_units,),
                                    name="b_{}".format(gate_name),
                                    regularizable=False),
                     gate.nonlinearity)
@@ -122,19 +117,15 @@ class CorefGRULayer(MergeLayer):
             self.hid_init = hid_init
         else:
             self.hid_init = self.add_param(
-                hid_init, (1, self.num_units_fast), name="hid_init",
+                hid_init, (1, self.num_units), name="hid_init",
                 trainable=learn_init, regularizable=False)
         # slow hidden state (add one for no coref)
         if isinstance(hid_init_slow, Layer):
             self.hid_init_slow = hid_init_slow
         else:
-            if self.num_units_slow>0:
-                self.hid_init_slow = self.add_param(
-                    hid_init_slow, (1,self.num_coref+1,self.num_units_slow), 
-                    name="hid_init_slow",
-                    trainable=learn_init, regularizable=False)
-            else:
-                self.hid_init_slow = T.zeros((1,self.num_coref+1, self.num_units_slow))
+            self.hid_init_slow = self.add_param(
+                hid_init_slow, (1,self.num_coref+1, self.num_units), name="hid_init_slow",
+                trainable=learn_init, regularizable=False)
 
     def get_output_shape_for(self, input_shapes):
         # The shape of the input to this layer will be the first element
@@ -143,10 +134,10 @@ class CorefGRULayer(MergeLayer):
         # When only_return_final is true, the second (sequence step) dimension
         # will be flattened
         if self.only_return_final:
-            return input_shape[0], self.num_units_fast+self.num_units_slow
+            return input_shape[0], self.num_units
         # Otherwise, the shape will be (n_batch, n_steps, num_units)
         else:
-            return input_shape[0], input_shape[1], self.num_units_fast+self.num_units_slow
+            return input_shape[0], input_shape[1], self.num_units
 
     def get_output_for(self, inputs, **kwargs):
         """
@@ -226,13 +217,12 @@ class CorefGRULayer(MergeLayer):
 
         # Create single recurrent computation step function
         # input__n is the n'th vector of the input
-        def step(input_n, coref_n, hid_previous, hid_previous_slow, *args):
+        def step(input_n, coref_n, hid_prev, hid_previous_slow, *args):
             nb = hid_previous_slow.shape[0]
             # select the current slow hidden state
             ent_previous = hid_previous_slow[T.arange(nb), coref_n, :]
             # concatenate with fast hid state
-            hid_previous = T.set_subtensor(
-                    hid_previous[:,self.num_units_fast:], ent_previous)
+            hid_previous = T.concatenate([hid_prev, ent_previous], axis=1)
 
             # Compute W_{hr} h_{t - 1}, W_{hu} h_{t - 1}, and W_{hc} h_{t - 1}
             hid_input = T.dot(hid_previous, W_hid_stacked)
@@ -263,12 +253,11 @@ class CorefGRULayer(MergeLayer):
             hidden_update = self.nonlinearity_hid(hidden_update)
 
             # Compute (1 - u_t)h_{t - 1} + u_t c_t
-            hid = (1 - updategate)*hid_previous + updategate*hidden_update
+            hid = (1 - updategate)*hid_prev + updategate*hidden_update
 
             # slice slow states
-            hid_slow = hid[:,self.num_units_fast:]
-            if not self.propagate_nocoref:
-                hid_slow = T.switch(coref_n[:,None], hid_slow, T.zeros((nb,self.num_units_slow)))
+            hid_slow = hid.copy()
+            hid_slow = T.switch(coref_n[:,None], hid_slow, T.zeros((nb,self.num_units)))
             hid_new_slow = T.set_subtensor(
                     hid_previous_slow[T.arange(nb),coref_n,:], 
                     hid_slow)
@@ -305,7 +294,6 @@ class CorefGRULayer(MergeLayer):
             hid_init = T.dot(T.ones((num_batch, 1)), self.hid_init)
         if not isinstance(self.hid_init_slow, Layer):
             hid_init_slow = T.tile(self.hid_init_slow, (num_batch, 1, 1))
-        hid_init = T.concatenate([hid_init, hid_init_slow[:,0,:]], axis=1)
 
         # The hidden-to-hidden weight matrix is always used in step
         non_seqs = [W_hid_stacked]
@@ -337,7 +325,6 @@ class CorefGRULayer(MergeLayer):
                 truncate_gradient=self.gradient_steps,
                 strict=True)[0]
 
-
         hid_out = hid_states[0]
 
         # When it is requested that we only return the final sequence step,
@@ -353,29 +340,22 @@ class CorefGRULayer(MergeLayer):
                 hid_out = hid_out[:, ::-1]
 
         # concatenate coref memory to the usual output
-        hidapp = T.concatenate([T.zeros((num_batch, self.num_coref+1, self.num_units_fast)), 
-            hid_states[1][-1]], axis=2)
-        hid_out = T.concatenate([hid_out, hidapp], axis=1)
+        hid_out = T.concatenate([hid_out, hid_states[1][-1]], axis=1)
 
         return hid_out
 
 if __name__=="__main__":
     # hyperparameters
     d_in = 2
-    d_f = 2
-    d_s = 2
+    d = 2
     N = 5
 
     # set parameters (copy for r, z, h gates)
     W = np.asarray([[1.,0.],
-        [0.,1.],
-        [1.,0.],
         [0.,1.]]).astype('float32').transpose()
     U = np.asarray([[1.,0.,0.,0.],
-        [0.,0.,0.,0.],
-        [0.,0.,0.,0.],
-        [0.,0.,0.,1.]]).astype('float32')
-    b = np.asarray([0.,1.,1.,0.]).astype('float32')
+        [0.,0.,0.,1.]]).astype('float32').transpose()
+    b = np.asarray([0.,1.]).astype('float32')
 
     # construct gates
     r = Gate(W_in=W, W_hid=U, b=b, W_cell=None)
@@ -388,45 +368,53 @@ if __name__=="__main__":
         [2.,2.]]).astype('float32')
     Y = np.asarray([1,0,1,2,1]).astype('int32')
     M = np.asarray([1,1,1,0,0]).astype('int32')
+    hi = np.asarray([[[0,0],
+        [0,1],
+        [1,0]]]).astype('float32')
 
     # set output
-    H = np.asarray([[0.55,0.84,0.84,0.55],
-        [0.42,0.78,0.55,0],
-        [0.78,0.76,0.94,0.42],
-        [0.78,0.76,0.94,0.42],
-        [0.78,0.76,0.94,0.42]]).astype('float32')
+    H = np.asarray([[0.55,0.94],
+        [0.42,0.81],
+        [0.78,0.93],
+        [0.78,0.93],
+        [0.78,0.93]]).astype('float32')
+    HF = np.asarray([[0,0.78,1.],
+        [0,0.93,0.]]).astype('float32').transpose()
 
     # build network (use batch size of 1)
     x = T.ftensor3()
     y = T.imatrix()
     m = T.imatrix()
+    hs = T.ftensor3()
     l_in_x = InputLayer(shape=(1,N,d_in), input_var=x)
     l_in_y = InputLayer(shape=(1,N), input_var=y)
     l_in_m = InputLayer(shape=(1,N), input_var=m)
-    l_cgru = CorefGRULayer([l_in_x,l_in_y], 2, 2, 2,
+    l_in_h = InputLayer(shape=(1,3,d), input_var=hs)
+    l_cgru = CorefGRULayer([l_in_x,l_in_y], 2, 2,
             resetgate=r,
             updategate=u,
             hidden_update=h,
-            propagate_nocoref=True,
+            hid_init_slow=l_in_h,
             mask_input = l_in_m)
     l_hid = SliceLayer(l_cgru, indices=slice(0,-3), axis=1)
     l_hidslow = SliceLayer(l_cgru, indices=slice(-3,None), axis=1)
-    l_hidslow = SliceLayer(l_hidslow, indices=slice(-d_s, None), axis=2)
     l_gru = GRULayer(l_in_x, 4, mask_input = l_in_m)
 
     # test
-    f = theano.function([x,y,m], [get_output(l_hid), get_output(l_hidslow)], 
+    f = theano.function([x,y,m,hs], [get_output(l_hid),get_output(l_hidslow)], 
             on_unused_input='ignore')
     print("Expected output:")
     print(H)
     print("Actual output:")
-    out, hf = f(X[np.newaxis,:,:],Y[np.newaxis,:],M[np.newaxis,:])
+    out, hf = f(X[np.newaxis,:,:],Y[np.newaxis,:],M[np.newaxis,:],hi)
     print(out)
     if np.isclose(H[np.newaxis,:], out, rtol=0., atol=0.02).all():
         print("Test passed!")
     else:
         print("Test failed :(")
-    print("Final coref state:")
+    print("Expected final coref state:")
+    print(HF)
+    print("Actual final coref state:")
     print(hf)
 
     # time
@@ -438,41 +426,13 @@ if __name__=="__main__":
     params_gru = get_all_params(l_gru, trainable=True)
     updates_cgru = sgd(loss_cgru, params_cgru, learning_rate=0.1)
     updates_gru = sgd(loss_gru, params_gru, learning_rate=0.1)
-    f_cgru = theano.function([x,y,m], loss_cgru, updates=updates_cgru)
+    f_cgru = theano.function([x,y,m,hs], loss_cgru, updates=updates_cgru)
     f_gru = theano.function([x,y,m], loss_gru, updates=updates_gru, on_unused_input='ignore')
     tst = time.time()
     for i in range(100):
-        out = f_cgru(X[np.newaxis,:,:],Y[np.newaxis,:],M[np.newaxis,:])
+        out = f_cgru(X[np.newaxis,:,:],Y[np.newaxis,:],M[np.newaxis,:],hi)
     print "Coref GRU elapsed time = %.3f" % (time.time()-tst)
     tst = time.time()
     for i in range(100):
         out = f_gru(X[np.newaxis,:,:],Y[np.newaxis,:],M[np.newaxis,:])
     print "Coref GRU elapsed time = %.3f" % (time.time()-tst)
-
-    # another test
-    l_cgru = CorefGRULayer([l_in_x,l_in_y], 4, 0, 2,
-            resetgate=r,
-            updategate=u,
-            hidden_update=h,
-            mask_input= l_in_m)
-    l_gru = GRULayer(l_in_x, 4,
-            resetgate=r,
-            updategate=u,
-            hidden_update=h,
-            mask_input= l_in_m)
-    l_hid = SliceLayer(l_cgru, indices=slice(0,-3), axis=1)
-    l_hidslow = SliceLayer(l_cgru, indices=slice(-3,None), axis=1)
-    l_hidslow = SliceLayer(l_hidslow, indices=slice(-0, None), axis=2)
-    f_cgru = theano.function([x,y,m], [get_output(l_hid),get_output(l_hidslow)], 
-            on_unused_input='ignore')
-    f_gru = theano.function([x,y,m], get_output(l_gru), on_unused_input='ignore')
-    out_cgru, hf = f_cgru(X[np.newaxis,:,:],Y[np.newaxis,:],M[np.newaxis,:])
-    out_gru = f_gru(X[np.newaxis,:,:],Y[np.newaxis,:],M[np.newaxis,:])
-    print("Coref GRU output:")
-    print(out_cgru)
-    print("GRU output:")
-    print(out_gru)
-    if np.isclose(out_cgru, out_gru, rtol=0., atol=0.01).all():
-        print("Test passed!")
-    else:
-        print("Test failed :(")

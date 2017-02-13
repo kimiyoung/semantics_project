@@ -4,29 +4,18 @@ import cPickle as pkl
 import shutil
 
 from config import *
-from model import GAReader, GAReaderpp_prior, StanfordAR, GAReaderpp, GAReaderppp
+from model import GAReader, GAReaderpp_prior, StanfordAR, GAReaderpp, GAReaderppp, GAKnowledge
+from model import GAReaderpropnc
 from model import DeepASReader, DeepAoAReader
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 def main(load_path, params, mode='test'):
 
-    regularizer = params['regularizer']
-    rlambda = params['lambda']
-    nhidden = params['nhidden']
-    dropout = params['dropout']
     word2vec = params['word2vec']
     dataset = params['dataset']
-    nlayers = params['nlayers']
-    train_emb = params['train_emb']
-    subsample = params['subsample']
     base_model = params['model']
-    char_dim = params['char_dim']
-    use_feat = params['use_feat']
-    gating_fn = params['gating_fn']
-    numcoref = params['num_coref']
-    corefdim = params['coref_dim']
 
-    use_chars = char_dim>0
+    use_chars = params['char_dim']>0
     dp = DataPreprocessor.DataPreprocessor()
     data = dp.preprocess(dataset, no_training_set=True, use_chars=use_chars)
     inv_vocab = data.inv_dictionary
@@ -39,9 +28,8 @@ def main(load_path, params, mode='test'):
 
     print("building network ...")
     W_init, embed_dim = Helpers.load_word2vec_embeddings(data.dictionary[0], word2vec)
-    m = eval(base_model).Model(nlayers, data.vocab_size, data.num_chars, W_init, 
-            regularizer, rlambda, nhidden, embed_dim, dropout, train_emb, subsample, 
-            char_dim, use_feat, gating_fn, numcoref, corefdim, save_attn=True)
+    m = eval(base_model).Model(params, data.vocab_size, data.num_chars, W_init, 
+            embed_dim, save_attn=True)
     m.load_model('%s/best_model.p'%load_path)
 
     print("testing ...")
@@ -51,8 +39,8 @@ def main(load_path, params, mode='test'):
         batch_loader_test.max_doc_len)).astype('float32')
     fids, attns = [], []
     total_loss, total_acc, n = 0., 0., 0.
-    for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, cr, fnames in batch_loader_test:
-        outs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, cr)
+    for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, crd, crq, fnames in batch_loader_test:
+        outs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, crd, crq)
         loss, acc, probs, doc_probs = outs[:4]
 
         bsize = dw.shape[0]

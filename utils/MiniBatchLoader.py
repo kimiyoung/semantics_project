@@ -77,7 +77,8 @@ class MiniBatchLoader():
         qw = np.zeros((curr_batch_size, self.max_qry_len, 1), dtype='int32') # query words
         c = np.zeros((curr_batch_size, curr_max_doc_len, self.max_num_cand), 
                 dtype='int32')   # candidate answers
-        cr = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32') # coref id
+        crd = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32') # coref id
+        crq = np.zeros((curr_batch_size, self.max_qry_len), dtype='int32') # coref id
         cl = np.zeros((curr_batch_size,), dtype='int32') # position of cloze in query
 
         m_dw = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32')  # document word mask
@@ -122,7 +123,11 @@ class MiniBatchLoader():
 
             # build coref index 
             for ic, chain in enumerate(coref):
-                cr[n,list(chain)] = ic+1
+                cord = filter(lambda x:x<len(doc_w), chain)
+                corq = filter(lambda x:x>=len(doc_w), chain)
+                corq = map(lambda x:x-len(doc_w), corq)
+                crd[n,list(cord)] = ic+1
+                crq[n,list(corq)] = ic+1
 
             cl[n] = cloze
             fnames[n] = fname
@@ -143,7 +148,7 @@ class MiniBatchLoader():
 
         self.ptr += 1
 
-        return dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, cr, fnames
+        return dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, crd, crq, fnames
 
 def unit_test(mini_batch_loader):
     """unit test to validate MiniBatchLoader using max-frequency (exclusive).
