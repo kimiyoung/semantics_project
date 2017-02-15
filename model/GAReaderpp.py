@@ -17,7 +17,8 @@ def prepare_input(d,q):
 
 class Model:
 
-    def __init__(self, params, vocab_size, num_chars, W_init, embed_dim, save_attn=False):
+    def __init__(self, params, vocab_size, num_chars, W_init, embed_dim, 
+            cloze=True, save_attn=False):
         self.nhidden = params['nhidden']
         self.embed_dim = embed_dim
         self.dropout = params['dropout']
@@ -34,9 +35,11 @@ class Model:
         K = params['nlayers']
         self.corefdim = params['coref_dim']
 
-        norm = lasagne.regularization.l2 if params['regularizer']=='l2' else lasagne.regularization.l1
+        norm = (lasagne.regularization.l2 
+                if params['regularizer']=='l2' else lasagne.regularization.l1)
         self.use_chars = self.char_dim!=0
-        if W_init is None: W_init = lasagne.init.GlorotNormal().sample((vocab_size, self.embed_dim))
+        if W_init is None: 
+            W_init = lasagne.init.GlorotNormal().sample((vocab_size, self.embed_dim))
 
         doc_var, query_var = T.itensor3('doc'), T.itensor3('quer')
         cand_var, doccoref_var, qrycoref_var = T.itensor3('cand'), T.imatrix('coref'), \
@@ -54,9 +57,10 @@ class Model:
 
         if rlambda> 0.: W_pert = W_init + lasagne.init.GlorotNormal().sample(W_init.shape)
         else: W_pert = W_init
+
         self.predicted_probs, predicted_probs_val, \
                 doc_probs_val, self.network, W_emb, attentions = (
-                self.build_network(K, vocab_size, W_pert))
+                self.build_network(K, vocab_size, W_pert, cloze))
 
         self.loss_fn = T.nnet.categorical_crossentropy(self.predicted_probs, 
                 target_var).mean() + rlambda*norm(W_emb-W_init)
@@ -106,7 +110,7 @@ class Model:
                 tt, tm.astype('int8'), 
                 m_c.astype('int8'), f, cl, crd, crq)
 
-    def build_network(self, K, vocab_size, W_init):
+    def build_network(self, K, vocab_size, W_init, cloze):
 
         l_docin = L.InputLayer(shape=(None,None,1), input_var=self.inps[0])
         l_doctokin = L.InputLayer(shape=(None,None), input_var=self.inps[1])
@@ -160,7 +164,7 @@ class Model:
             l_m = PairwiseInteractionLayer([l_doce,l_qembed])
             attentions.append(L.get_output(l_m, deterministic=True))
 
-        for i in range(K-1):
+        for i in range(K):
             if self.use_feat and i==K-1: 
                 l_doce = L.ConcatLayer([l_doce, l_fembed], axis=2) # B x N x DE+2
 
@@ -229,7 +233,7 @@ class Model:
                         mask_input=self.inps[7])
                 l_doce = L.dropout(l_doc_2_in, p=self.dropout) # B x N x DE
 
-        l_ans = AnswerLayer([l_doc_1,l_q_c_1], self.inps[12])
+        l_ans = AnswerLayer([l_doc_1,l_q_c_1], self.inps[12], cloze=cloze)
         l_prob = AttentionSumLayer(l_ans, self.inps[4], mask_input=self.inps[10])
         final = L.get_output(l_prob)
         final_v = L.get_output(l_prob, deterministic=True)

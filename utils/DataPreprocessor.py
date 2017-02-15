@@ -60,18 +60,18 @@ class DataPreprocessor:
             print "no " + wc_file + " found, constructing the word counts ..."
             word_counts = np.zeros((len(word_dictionary),))
 
-            if os.path.isfile(question_dir+'/training.data'):
-                f = open(question_dir+'/training.data')
+            if os.path.isfile(question_dir+'/training_coref.data'):
+                f = open(question_dir+'/training_coref.data')
                 for line in f:
                     for w in line.rstrip().split():
                         word_counts[word_dictionary[w]] += 1
                 f.close()
-                f = open(question_dir+'/validation.data')
+                f = open(question_dir+'/validation_coref.data')
                 for line in f:
                     for w in line.rstrip().split():
                         word_counts[word_dictionary[w]] += 1
                 f.close()
-                f = open(question_dir+'/test.data')
+                f = open(question_dir+'/test_coref.data')
                 for line in f:
                     for w in line.rstrip().split():
                         word_counts[word_dictionary[w]] += 1
@@ -109,17 +109,17 @@ class DataPreprocessor:
 
             vocab_set = set()
 
-            if os.path.isfile(question_dir+'/training.data'):
+            if os.path.isfile(question_dir+'/training_coref.data'):
                 print "found data file"
-                f = open(question_dir+'/training.data')
+                f = open(question_dir+'/training_coref.data')
                 for line in f:
                     vocab_set |= set(line.rstrip().split())
                 f.close()
-                f = open(question_dir+'/validation.data')
+                f = open(question_dir+'/validation_coref.data')
                 for line in f:
                     vocab_set |= set(line.rstrip().split())
                 f.close()
-                f = open(question_dir+'/test.data')
+                f = open(question_dir+'/test_coref.data')
                 for line in f:
                     vocab_set |= set(line.rstrip().split())
                 f.close()
@@ -184,10 +184,13 @@ class DataPreprocessor:
         try:
             cloze = qry_raw.index('@placeholder')
         except ValueError:
-            print '@placeholder not found in ', fname, '. Fixing...'
-            at = qry_raw.index('@')
-            qry_raw = qry_raw[:at] + [''.join(qry_raw[at:at+2])] + qry_raw[at+2:]
-            cloze = qry_raw.index('@placeholder')
+            try:
+                at = qry_raw.index('@')
+                print '@placeholder not found in ', fname, '. Fixing...'
+                qry_raw = qry_raw[:at] + [''.join(qry_raw[at:at+2])] + qry_raw[at+2:]
+                cloze = qry_raw.index('@placeholder')
+            except ValueError:
+                cloze = -1
 
         # tokens/entities --> indexes
         doc_words = map(lambda w:w_dict[w], doc_raw)

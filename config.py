@@ -9,7 +9,7 @@ GRAD_STEPS = -1
 # Number of epochs for training
 NUM_EPOCHS = 30
 # do validation every VALIDATION_FREQ iterations
-VALIDATION_FREQ = 100
+VALIDATION_FREQ = 25
 # maximum word length for character model
 MAX_WORD_LEN = 10
 # annealing every x epochs
@@ -33,8 +33,8 @@ def get_params(dataset):
         return lambada_params
     elif dataset=='babi' or dataset=='babi-3-1k-pcrf' or dataset=='babi-3-1k-orig':
         return babi_params
-    elif dataset=='babi-clean':
-        return babiclean_params
+    elif dataset=='babi-3-1k-mix' or dataset=='babi-3-10k-mix':
+        return babimix_params
     elif dataset=='debug' or dataset=='wdw_debug':
         return debug_params
     else:
@@ -88,14 +88,14 @@ cbtne_params = {
         }
 
 lambada_params = {
-        'nhidden'   :   224,
+     'nhidden'   :   240,
         'char_dim'  :   0,
-        'dropout'   :   0.2,
+     'dropout'   :   0.2,
         'word2vec'  :   'word2vec/word2vec_glove.txt',
         'train_emb' :   1,
-        'use_feat'  :   0,
-        'num_coref' :   12,
-        'coref_dim' :   32,
+     'use_feat'  :   0,
+        'num_coref' :   14,
+     'coref_dim' :   16,
         }
 
 babi_params = {
@@ -105,19 +105,19 @@ babi_params = {
         'word2vec'  :   None,
         'train_emb' :   1,
         'use_feat'  :   0,
-        'num_coref' :   4,
+        'num_coref' :   13,
         'coref_dim' :   32,
         }
 
-babiclean_params = {
-        'nhidden'   :   112,
+babimix_params = {
+        'nhidden'   :   32,
         'char_dim'  :   0,
-        'dropout'   :   0.3,
+        'dropout'   :   0.1,
         'word2vec'  :   None,
         'train_emb' :   1,
         'use_feat'  :   0,
-        'num_coref' :   4,
-        'coref_dim' :   16,
+        'num_coref' :   20,
+        'coref_dim' :   32,
         }
 
 debug_params = {

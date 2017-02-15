@@ -42,6 +42,7 @@ class CorefGRULayer(MergeLayer):
                  precompute_input=True,
                  mask_input=None,
                  only_return_final=False,
+                 propagate_nocoref=False,
                  **kwargs):
 
         # This layer inherits from a MergeLayer, because it can have four 
@@ -73,6 +74,7 @@ class CorefGRULayer(MergeLayer):
         self.unroll_scan = unroll_scan
         self.precompute_input = precompute_input
         self.only_return_final = only_return_final
+        self.propagate_nocoref = propagate_nocoref
 
         if unroll_scan and gradient_steps != -1:
             raise ValueError(
@@ -257,7 +259,8 @@ class CorefGRULayer(MergeLayer):
 
             # slice slow states
             hid_slow = hid.copy()
-            hid_slow = T.switch(coref_n[:,None], hid_slow, T.zeros((nb,self.num_units)))
+            if not self.propagate_nocoref:
+                hid_slow = T.switch(coref_n[:,None], hid_slow, T.zeros((nb,self.num_units)))
             hid_new_slow = T.set_subtensor(
                     hid_previous_slow[T.arange(nb),coref_n,:], 
                     hid_slow)

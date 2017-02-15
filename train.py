@@ -22,6 +22,11 @@ def main(save_path, params):
     use_chars = params['char_dim']>0
     dp = DataPreprocessor.DataPreprocessor()
     data = dp.preprocess(dataset, no_training_set=False, use_chars=use_chars)
+    if data.validation[0][6]==-1:
+        # no clozes
+        cloze=False
+    else:
+        cloze=True
 
     print("building minibatch loaders ...")
     batch_loader_train = MiniBatchLoader.MiniBatchLoader(data.training, BATCH_SIZE, 
@@ -30,7 +35,8 @@ def main(save_path, params):
 
     print("building network ...")
     W_init, embed_dim, = Helpers.load_word2vec_embeddings(data.dictionary[0], word2vec)
-    m = eval(base_model).Model(params, data.vocab_size, data.num_chars, W_init, embed_dim)
+    m = eval(base_model).Model(params, data.vocab_size, data.num_chars, W_init, embed_dim,
+            cloze=cloze)
 
     print("training ...")
     num_iter = 0

@@ -114,9 +114,10 @@ class AnswerLayer(L.MergeLayer):
     return a distribution over the second dimension of D.
     """
 
-    def __init__(self, incomings, pointer, **kwargs):
+    def __init__(self, incomings, pointer, cloze=True, **kwargs):
         super(AnswerLayer, self).__init__(incomings, **kwargs)
         self.pointer = pointer
+        self.cloze = cloze
         
     def get_output_shape_for(self, input_shapes):
         return (input_shapes[0][0], input_shapes[0][1])
@@ -125,9 +126,13 @@ class AnswerLayer(L.MergeLayer):
 
         # inputs[0]: B x N x D
         # inputs[1]: B x Q x D
-        # self.pointer: B x 1
+        # self.pointer: B x 1 / None
 
-        q = inputs[1][T.arange(inputs[1].shape[0]),self.pointer,:] # B x D
+        if self.cloze:
+            q = inputs[1][T.arange(inputs[1].shape[0]),self.pointer,:] # B x D
+        else:
+            mid = inputs[1].shape[2]/2
+            q = T.concatenate([inputs[1][:,-1,:mid],inputs[1][:,0,mid:]], axis=1) # B x D
         p = T.batched_dot(inputs[0],q) # B x N
         pm = T.nnet.softmax(p) # B x N
 
