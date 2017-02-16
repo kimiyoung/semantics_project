@@ -44,7 +44,7 @@ params['num_coref'] = int(open(params['dataset']+'/num_coref.txt').read().split(
 
 # save directory
 w2v_filename = params['word2vec'].split('/')[-1].split('.')[0] if params['word2vec'] else 'None'
-save_path = ('crfreader_experiments_babi/'+params['model']+'/'+params['dataset'].split('/')[0]+
+save_path = ('crfreader_experiments_babi-v2/'+params['model']+'/'+params['dataset'].split('/')[0]+
         '/m'+
         '_lr%.4f'%LEARNING_RATE+
         '_bsize%d'%BATCH_SIZE+

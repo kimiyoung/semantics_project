@@ -238,9 +238,9 @@ class DataPreprocessor:
                 cand_raw = map(lambda x:x.strip().split(':')[0].split(), 
                         raw[8:]) # candidate answers
                 coref = []
-            #if not any(aa in doc_raw for aa in ans_raw.split()):
-            #    print "answer not in doc %s" % fname
-            #    return None
+            if not any(aa in doc_raw for aa in ans_raw.split()):
+                print "answer not in doc %s" % fname
+                return None
         except IndexError:
             print "something wrong in ", fname
             return None

@@ -17,7 +17,7 @@ def prepare_input(d,q):
 
 class Model:
 
-    def __init__(self, params, vocab_size, num_chars, W_init, embed_dim, 
+    def __init__(self, params, vocab_size, num_chars, W_init, embed_dim, num_cand, 
             cloze=True, save_attn=False):
         self.nhidden = params['nhidden']
         self.embed_dim = embed_dim
@@ -72,10 +72,11 @@ class Model:
 
         self.params = L.get_all_params(self.network, trainable=True)
         
+        lr_var = T.fscalar(name="learning_rate")
         updates = lasagne.updates.adam(self.loss_fn, self.params, 
-                learning_rate=self.learning_rate)
+                learning_rate=lr_var)
 
-        self.train_fn = theano.function(self.inps,
+        self.train_fn = theano.function(self.inps+[lr_var],
                 [self.loss_fn, self.eval_fn, self.predicted_probs],
                 updates=updates,
                 on_unused_input='warn')
@@ -86,12 +87,6 @@ class Model:
 
     def anneal(self):
         self.learning_rate /= 2
-        updates = lasagne.updates.adam(self.loss_fn, self.params, 
-                learning_rate=self.learning_rate)
-        self.train_fn = theano.function(self.inps,
-                [self.loss_fn, self.eval_fn, self.predicted_probs],
-                updates=updates,
-                on_unused_input='warn')
 
     def train(self, dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, crd, crq):
         f = prepare_input(dw,qw)
@@ -99,7 +94,7 @@ class Model:
         return self.train_fn(dw, dt, qw, qt, c, a, 
                 m_dw.astype('int8'), m_qw.astype('int8'), 
                 tt, tm.astype('int8'), 
-                m_c.astype('int8'), f, cl, crd, crq)
+                m_c.astype('int8'), f, cl, crd, crq, self.learning_rate)
 
     def validate(self, dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, crd, crq):
         f = prepare_input(dw,qw)
