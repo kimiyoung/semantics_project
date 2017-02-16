@@ -99,7 +99,7 @@ lambada_params = {
         }
 
 babi_params = {
-        'nhidden'   :   64,
+        'nhidden'   :   8,
         'char_dim'  :   0,
         'dropout'   :   0.1,
         'word2vec'  :   None,

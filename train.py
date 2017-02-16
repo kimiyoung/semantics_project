@@ -5,7 +5,7 @@ import shutil
 import cPickle as pkl
 
 from config import *
-from model import GAReaderSelect
+from model import GAReaderSelect, GAReaderSelectTied
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 def main(save_path, params):
@@ -118,7 +118,7 @@ def main(save_path, params):
     d_pr = np.zeros((len(batch_loader_test.questions),
         batch_loader_test.max_doc_len)).astype('float32')
     fids, attns = [], []
-    total_loss, total_acc, n = 0., 0., 0.
+    total_loss, total_acc, n = 0., 0., 0
     for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, crd, crq, fnames in batch_loader_test:
         outs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, crd, crq)
         loss, acc, probs, doc_probs = outs[:4]

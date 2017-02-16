@@ -91,9 +91,11 @@ class DataPreprocessor:
                     document = fp.readline().split()
                     fp.readline()
                     query = fp.readline().split()
+                    fp.readline()
+                    answer = fp.readline().split()
                     fp.close()
 
-                    for w in document+query:
+                    for w in document+query+answer:
                         word_counts[word_dictionary[w]] += 1
             np.save(wc_file, word_counts)
 
@@ -138,9 +140,11 @@ class DataPreprocessor:
                     document = fp.readline().split()
                     fp.readline()
                     query = fp.readline().split()
+                    fp.readline()
+                    answer = fp.readline().split()
                     fp.close()
 
-                    vocab_set |= set(document) | set(query)
+                    vocab_set |= set(document) | set(query) | set(answer)
 
                     # show progress
                     n += 1
