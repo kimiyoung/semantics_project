@@ -31,7 +31,7 @@ def get_params(dataset):
         return cbtne_params
     elif dataset=='lambada':
         return lambada_params
-    elif dataset=='babi' or dataset=='babi-3-1k-pcrf' or dataset=='babi-3-1k-orig':
+    elif dataset.startswith('babi-orig-1k-') or dataset.startswith('babi-pron-1k-'):
         return babi_params
     elif dataset=='babi-3-1k-mix' or dataset=='babi-3-10k-mix':
         return babimix_params
@@ -99,14 +99,13 @@ lambada_params = {
         }
 
 babi_params = {
-        'nhidden'   :   32,
+        'nhidden'   :   64,
         'char_dim'  :   0,
         'dropout'   :   0.1,
         'word2vec'  :   None,
         'train_emb' :   1,
         'use_feat'  :   0,
-        'num_coref' :   13,
-        'coref_dim' :   32,
+        'coref_dim' :   0,
         }
 
 babimix_params = {

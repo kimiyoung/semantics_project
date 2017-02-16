@@ -30,11 +30,12 @@ def main(load_path, params, mode='test'):
         batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.test, BATCH_SIZE)
     else:
         batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.validation, BATCH_SIZE)
+    num_candidates = batch_loader_test.max_num_cand
 
     print("building network ...")
     W_init, embed_dim = Helpers.load_word2vec_embeddings(data.dictionary[0], word2vec)
     m = eval(base_model).Model(params, data.vocab_size, data.num_chars, W_init, 
-            embed_dim, cloze=cloze, save_attn=True)
+            embed_dim, num_candidates, cloze=cloze, save_attn=True)
     m.load_model('%s/best_model.p'%load_path)
 
     print("testing ...")

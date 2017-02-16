@@ -10,10 +10,10 @@ from config import *
 
 # parse arguments
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--model', dest='model', type=str, default='GAKnowledge',
+parser.add_argument('--model', dest='model', type=str, default='GAReaderSelect',
         help='base model - (GAReader || GAReaderpp || StanfordAR || DeepASReader)')
 parser.add_argument('--mode', dest='mode', type=int, default=0,
-        help='run mode - (0-train+test, 1-train only, 2-test only, 3-val only)')
+        help='run mode - (0-train only, 1-test only, 2-val only)')
 parser.add_argument('--regularizer', dest='regularizer', type=str, default='l2',
         help='l2 or l1 norm for regularizing word embeddings')
 parser.add_argument('--lambda', dest='lambda', type=float, default=0.,
@@ -39,9 +39,12 @@ params.update(cmd)
 np.random.seed(params['seed'])
 random.seed(params['seed'])
 
+# number of coref
+params['num_coref'] = int(open(params['dataset']+'/num_coref.txt').read().split('\t')[0])
+
 # save directory
 w2v_filename = params['word2vec'].split('/')[-1].split('.')[0] if params['word2vec'] else 'None'
-save_path = ('crfreader_experiments_v4/'+params['model']+'/'+params['dataset'].split('/')[0]+
+save_path = ('crfreader_experiments_babi/'+params['model']+'/'+params['dataset'].split('/')[0]+
         '/m'+
         '_lr%.4f'%LEARNING_RATE+
         '_bsize%d'%BATCH_SIZE+
@@ -60,11 +63,10 @@ if not os.path.exists(save_path): os.makedirs(save_path)
 else: sys.exit()
 
 # train
-if params['mode']<2:
+if params['mode']==0:
     train.main(save_path, params)
-
 # test
-if params['mode']==0 or params['mode']==2:
+elif params['mode']==1:
     test.main(save_path, params)
-elif params['mode']==3:
+elif params['mode']==2:
     test.main(save_path, params, mode='validation')

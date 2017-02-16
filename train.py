@@ -2,11 +2,10 @@ import numpy as np
 import time
 import os
 import shutil
+import cPickle as pkl
 
 from config import *
-from model import GAReader, GAReaderpp_prior, StanfordAR, GAReaderpp, GAReaderppp, GAKnowledge
-from model import GAReaderpropnc
-from model import DeepASReader, DeepAoAReader
+from model import GAReaderSelect
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 def main(save_path, params):
@@ -32,11 +31,13 @@ def main(save_path, params):
     batch_loader_train = MiniBatchLoader.MiniBatchLoader(data.training, BATCH_SIZE, 
             sample=train_cut)
     batch_loader_val = MiniBatchLoader.MiniBatchLoader(data.validation, BATCH_SIZE)
+    batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.test, BATCH_SIZE)
+    num_candidates = batch_loader_train.max_num_cand
 
     print("building network ...")
     W_init, embed_dim, = Helpers.load_word2vec_embeddings(data.dictionary[0], word2vec)
     m = eval(base_model).Model(params, data.vocab_size, data.num_chars, W_init, embed_dim,
-            cloze=cloze)
+            num_candidates, cloze=cloze)
 
     print("training ...")
     num_iter = 0
@@ -55,6 +56,7 @@ def main(save_path, params):
         print('loading init model')
         m.load_model('%s/model_init.p'%save_path)
 
+    # train
     for epoch in xrange(NUM_EPOCHS):
         estart = time.time()
         new_max = False
@@ -106,4 +108,37 @@ def main(save_path, params):
         if STOPPING and not new_max:
             break
 
+    # test
+    mode = 'test'
+    m.load_model('%s/best_model.p'%save_path)
+
+    print("testing ...")
+    pr = np.zeros((len(batch_loader_test.questions),
+        batch_loader_test.max_num_cand)).astype('float32')
+    d_pr = np.zeros((len(batch_loader_test.questions),
+        batch_loader_test.max_doc_len)).astype('float32')
+    fids, attns = [], []
+    total_loss, total_acc, n = 0., 0., 0.
+    for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, crd, crq, fnames in batch_loader_test:
+        outs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, crd, crq)
+        loss, acc, probs, doc_probs = outs[:4]
+
+        bsize = dw.shape[0]
+        total_loss += bsize*loss
+        total_acc += bsize*acc
+
+        pr[n:n+bsize,:] = probs
+        d_pr[n:n+bsize,:doc_probs.shape[1]] = doc_probs
+        fids += fnames
+        n += bsize
+
+    message = '%s Loss %.4e acc=%.4f' % (mode.upper(), total_loss/n, total_acc/n)
+    print message
+    logger.write(message+'\n')
+
+    np.save('%s/%s.probs' % (save_path,mode),np.asarray(pr))
+    pkl.dump(attns, open('%s/%s.attns' % (save_path,mode),'w'))
+    f = open('%s/%s.ids' % (save_path,mode),'w')
+    for item in fids: f.write(str(item)+'\n')
+    f.close()
     logger.close()

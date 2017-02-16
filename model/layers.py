@@ -106,6 +106,43 @@ class AttentionSumLayer(L.Layer):
 
         return T.batched_dot(pm, self.aggregator) # B x C
 
+class SelectionLayer(L.MergeLayer):
+    """
+    Layer which takes a 3D tensor D and a 2D distribution A over the second axis of D. 
+    First computes a attention weighted representation of each element in the batch of D, 
+    followed by multiplication with the input mask and renormalization. Then selects an
+    answer from a lookup table using a linear transformation and softmax.
+    """
+
+    def __init__(self, incomings, num_hid, num_out, W=lasagne.init.Uniform(),
+            mask_input=None, **kwargs):
+        super(SelectionLayer, self).__init__(incomings, **kwargs)
+        self.num_hid = num_hid
+        self.num_out = num_out
+        if mask_input is not None and type(mask_input).__name__!='TensorVariable': 
+            raise TypeError('Mask input must be theano tensor variable')
+        self.mask = mask_input
+        self.W = self.add_param(W, (num_hid, num_out), name='W')
+
+    def get_output_shape_for(self, input_shapes):
+        return (input_shapes[0][0], num_out)
+
+    def get_output_for(self, inputs, **kwargs):
+
+        # inputs[0]: B x N x D
+        # inputs[1]: B x N
+        # self.mask: B x N
+
+        if self.mask:
+            pm = inputs[1]*self.mask # B x N
+            pm = pm/pm.sum(axis=1)[:,np.newaxis] # B x N
+        else:
+            pm = inputs[1] # B x N
+        doc = (pm[:,:,np.newaxis]*inputs[0]).sum(axis=1) # B x D
+        pro = T.nnet.softmax(T.dot(doc, self.W)) # B x O
+
+        return pro
+
 class AnswerLayer(L.MergeLayer):
     """
     Layer which takes two 3D tensors D, Q and a pointer X as input. First, the elements 
