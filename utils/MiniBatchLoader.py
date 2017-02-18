@@ -119,7 +119,7 @@ class MiniBatchLoader():
                 if ans==cc: 
                     ans_idx = index
                     a[n] = it # answer
-            assert ans_idx, "answer index in doc empty! %s" % fname
+            #assert ans_idx, "answer index in doc empty! %s" % fname
 
             # build coref index 
             for ic, chain in enumerate(coref):

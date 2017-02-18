@@ -6,6 +6,8 @@ import sys
 from itertools import izip
 from config import MAX_WORD_LEN
 
+MAX_COREF=100
+
 SYMB_BEGIN = "@begin"
 SYMB_END = "@end"
 
@@ -232,15 +234,15 @@ class DataPreprocessor:
                 split = raw[8:].index('\n')
                 cand_raw = map(lambda x:x.strip().split(':')[0].split(), 
                         raw[8:8+split]) # candidate answers
-                coref = [_parse_coref(line.rstrip()) for line in raw[9+split:]]
+                coref = [_parse_coref(line.rstrip()) for line in raw[9+split:9+split+MAX_COREF]]
             except ValueError:
                 # no corefs
                 cand_raw = map(lambda x:x.strip().split(':')[0].split(), 
                         raw[8:]) # candidate answers
                 coref = []
-            if not any(aa in doc_raw for aa in ans_raw.split()):
-                print "answer not in doc %s" % fname
-                return None
+            #if not any(aa in doc_raw for aa in ans_raw.split()):
+            #    print "answer not in doc %s" % fname
+            #    return None
         except IndexError:
             print "something wrong in ", fname
             return None

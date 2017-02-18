@@ -99,13 +99,13 @@ lambada_params = {
         }
 
 babi_params = {
-        'nhidden'   :   64,
+        'nhidden'   :   48,
         'char_dim'  :   0,
         'dropout'   :   0.1,
         'word2vec'  :   None,
         'train_emb' :   1,
         'use_feat'  :   0,
-        'coref_dim' :   0,
+        'coref_dim' :   16,
         }
 
 babimix_params = {
