@@ -10,7 +10,7 @@ from config import *
 
 # parse arguments
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--model', dest='model', type=str, default='GAReaderSelect',
+parser.add_argument('--model', dest='model', type=str, default='GAReaderpp',
         help='base model - (GAReader || GAReaderpp || StanfordAR || DeepASReader)')
 parser.add_argument('--mode', dest='mode', type=int, default=0,
         help='run mode - (0-train only, 1-test only, 2-val only)')
@@ -40,7 +40,7 @@ np.random.seed(params['seed'])
 random.seed(params['seed'])
 
 # number of coref
-params['num_coref'] = int(open(params['dataset']+'/num_coref.txt').read().split('\t')[0])
+#params['num_coref'] = int(open(params['dataset']+'/num_coref.txt').read().split('\t')[0])
 
 # save directory
 w2v_filename = params['word2vec'].split('/')[-1].split('.')[0] if params['word2vec'] else 'None'
@@ -60,7 +60,7 @@ save_path = ('crfreader_experiments_babi-v2/'+params['model']+'/'+params['datase
         #'_traincut%.1f'%params['train_cut']+'_gf%s'%params['gating_fn']+
         '_corefdim%d'%params['coref_dim']+'/')
 if not os.path.exists(save_path): os.makedirs(save_path)
-else: sys.exit()
+#else: sys.exit()
 
 # train
 if params['mode']==0:

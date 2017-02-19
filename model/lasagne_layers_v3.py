@@ -258,9 +258,11 @@ class CorefGRULayer(MergeLayer):
             hid = (1 - updategate)*hid_prev + updategate*hidden_update
 
             # slice slow states
-            hid_slow = hid.copy()
+            #hid_slow = hid.copy()
             if not self.propagate_nocoref:
-                hid_slow = T.switch(coref_n[:,None], hid_slow, T.zeros((nb,self.num_units)))
+                hid_slow = T.switch(coref_n[:,None], hid, T.zeros((nb,self.num_units)))
+            else:
+                hid_slow = hid
             hid_new_slow = T.set_subtensor(
                     hid_previous_slow[T.arange(nb),coref_n,:], 
                     hid_slow)
