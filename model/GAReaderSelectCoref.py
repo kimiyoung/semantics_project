@@ -108,7 +108,7 @@ class Model:
                 m_c.astype('int8'), f, cl, crdi, crqi)
 
     def _prepare_coref(self, cd):
-        cdi = np.zeros((cd.shape[0], cd.shape[1], self.num_coref+1), dtype='int8')
+        cdi = np.zeros((cd.shape[0], cd.shape[1], self.numcoref+1), dtype='int8')
         for i in np.arange(cd.shape[0]):
             cdi[i, np.arange(cd.shape[1]), cd[i,:]] = 1
         return cdi[:,:,1:]
@@ -124,9 +124,9 @@ class Model:
         l_tokin = L.InputLayer(shape=(None,MAX_WORD_LEN), input_var=self.inps[8])
         l_tokmask = L.InputLayer(shape=(None,MAX_WORD_LEN), input_var=self.inps[9])
         l_featin = L.InputLayer(shape=(None,None), input_var=self.inps[11])
-        l_doccorefin = L.InputLayer(shape=(None,None,self.max_coref_chains), 
+        l_doccorefin = L.InputLayer(shape=(None,None,self.numcoref), 
                 input_var=self.inps[13])
-        l_qrycorefin = L.InputLayer(shape=(None,None,self.max_coref_chains), 
+        l_qrycorefin = L.InputLayer(shape=(None,None,self.numcoref), 
                 input_var=self.inps[14])
 
         doc_shp = self.inps[1].shape

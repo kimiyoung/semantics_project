@@ -1,21 +1,21 @@
 # Minibatch Size
-BATCH_SIZE = 16
+BATCH_SIZE = 32
 # Gradient clip threshold
 GRAD_CLIP = 10
 # Learning rate
-LEARNING_RATE = 0.0005
+LEARNING_RATE = 0.01
 # Maximum number of steps in BPTT
 GRAD_STEPS = -1
 # Number of epochs for training
-NUM_EPOCHS = 10
+NUM_EPOCHS = 30
 # do validation every VALIDATION_FREQ iterations
-VALIDATION_FREQ = 100
+VALIDATION_FREQ = 25
 # maximum word length for character model
 MAX_WORD_LEN = 10
 # annealing every x epochs
-ANNEAL = 1
+ANNEAL = 4
 # early stopping
-STOPPING = True
+STOPPING = False
 
 # dataset params
 def get_params(dataset):
@@ -101,13 +101,13 @@ lambada_params = {
         }
 
 babi_params = {
-        'nhidden'   :   48,
+        'nhidden'   :   64,
         'char_dim'  :   0,
         'dropout'   :   0.1,
         'word2vec'  :   None,
         'train_emb' :   1,
         'use_feat'  :   0,
-        'coref_dim' :   16,
+        'coref_dim' :   0,
         }
 
 babimix_params = {

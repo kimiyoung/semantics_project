@@ -5,7 +5,7 @@ import shutil
 import cPickle as pkl
 
 from config import *
-from model import GAReaderSelect, GAReaderSelectTied, GAReaderpp, GAKnowledge, GAReaderCoref
+from model import GAReaderSelect, GAReaderSelectTied, GAReaderpp, GAKnowledge, GAReaderCoref, GAReaderSelectCoref
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 def main(save_path, params):
