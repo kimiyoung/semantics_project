@@ -60,7 +60,7 @@ save_path = ('crfreader_experiments_babi-v2/'+params['model']+'/'+params['datase
         #'_traincut%.1f'%params['train_cut']+'_gf%s'%params['gating_fn']+
         '_corefdim%d'%params['coref_dim']+'/')
 if not os.path.exists(save_path): os.makedirs(save_path)
-else: sys.exit()
+#else: sys.exit()
 
 # train
 if params['mode']==0:

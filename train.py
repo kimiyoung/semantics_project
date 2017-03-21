@@ -118,10 +118,13 @@ def main(save_path, params):
     d_pr = np.zeros((len(batch_loader_test.questions),
         batch_loader_test.max_doc_len)).astype('float32')
     fids, attns = [], []
+    dreps, qreps = [], []
     total_loss, total_acc, n = 0., 0., 0
     for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, crd, crq, fnames in batch_loader_test:
         outs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, crd, crq)
-        loss, acc, probs, doc_probs = outs[:4]
+        loss, acc, probs, drep, qrep, doc_probs = outs[:6]
+        dreps.append(drep)
+        qreps.append(qrep)
 
         bsize = dw.shape[0]
         total_loss += bsize*loss
@@ -137,7 +140,10 @@ def main(save_path, params):
     logger.write(message+'\n')
 
     np.save('%s/%s.probs' % (save_path,mode),np.asarray(pr))
+    if callable(getattr(m, "get_output_weights", None)):
+        np.save('%s/out_emb.npy' % save_path, m.get_output_weights())
     pkl.dump(attns, open('%s/%s.attns' % (save_path,mode),'w'))
+    pkl.dump([dreps, qreps], open('%s/%s.reps' % (save_path,mode),'w'))
     f = open('%s/%s.ids' % (save_path,mode),'w')
     for item in fids: f.write(str(item)+'\n')
     f.close()
