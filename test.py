@@ -4,7 +4,7 @@ import cPickle as pkl
 import shutil
 
 from config import *
-from model import GAReader, GAReaderpp_prior, StanfordAR, GAReaderpp, GAReaderppp, GAKnowledge, GAReaderCoref
+from model import GAReader, GAReaderpp_prior, StanfordAR, GAReaderpp, GAReaderppp, GAKnowledge, GAReaderCoref, GAReaderSelect
 from model import GAReaderpropnc
 from model import DeepASReader, DeepAoAReader
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
@@ -44,10 +44,13 @@ def main(load_path, params, mode='test'):
     d_pr = np.zeros((len(batch_loader_test.questions),
         batch_loader_test.max_doc_len)).astype('float32')
     fids, attns = [], []
+    dreps, qreps = [], []
     total_loss, total_acc, n = 0., 0., 0
     for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, crd, crq, fnames in batch_loader_test:
         outs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, crd, crq)
-        loss, acc, probs, doc_probs = outs[:4]
+        loss, acc, probs, drep, qrep, doc_probs = outs[:6]
+        dreps.append(drep)
+        qreps.append(qrep)
 
         bsize = dw.shape[0]
         total_loss += bsize*loss
@@ -65,7 +68,10 @@ def main(load_path, params, mode='test'):
     logger.close()
 
     np.save('%s/%s.probs' % (load_path,mode),np.asarray(pr))
+    if callable(getattr(m, "get_output_weights", None)):
+        np.save('%s/out_emb.npy' % load_path, m.get_output_weights())
     pkl.dump(attns, open('%s/%s.attns' % (load_path,mode),'w'))
+    pkl.dump([dreps, qreps], open('%s/%s.reps' % (load_path,mode),'w'))
     f = open('%s/%s.ids' % (load_path,mode),'w')
     for item in fids: f.write(str(item)+'\n')
     f.close()

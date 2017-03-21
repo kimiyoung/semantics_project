@@ -58,7 +58,7 @@ class Model:
         else: W_pert = W_init
 
         self.predicted_probs, predicted_probs_val, \
-                doc_probs_val, self.network, W_emb, attentions = (
+                doc_probs_val, self.network, W_emb, attentions, doc_rep, qry_rep = (
                 self.build_network(K, vocab_size, W_pert, cloze, num_out))
 
         self.loss_fn = T.nnet.categorical_crossentropy(self.predicted_probs, 
@@ -82,6 +82,7 @@ class Model:
                 on_unused_input='warn')
         self.validate_fn = theano.function(self.inps, 
                 [loss_fn_val, eval_fn_val, predicted_probs_val, 
+                    doc_rep, qry_rep, 
                     doc_probs_val]+attentions,
                 on_unused_input='warn')
 
@@ -217,8 +218,14 @@ class Model:
         final = L.get_output(l_prob)
         final_v = L.get_output(l_prob, deterministic=True)
         doc_probs_v = L.get_output(l_ans, deterministic=True)
+        doc_rep = L.get_output(l_doc_1, deterministic=True)
+        qry_rep = L.get_output(l_q_c_1, deterministic=True)
+        self.output_embeddings = l_prob.W
 
-        return final, final_v, doc_probs_v, l_prob, l_docembed.W, attentions
+        return final, final_v, doc_probs_v, l_prob, l_docembed.W, attentions, doc_rep, qry_rep
+
+    def get_output_weights(self):
+        return self.output_embeddings.get_value()
 
     def load_model(self, load_path):
         with open(load_path, 'r') as f:
