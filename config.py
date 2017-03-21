@@ -3,19 +3,19 @@ BATCH_SIZE = 32
 # Gradient clip threshold
 GRAD_CLIP = 10
 # Learning rate
-LEARNING_RATE = 0.01
+LEARNING_RATE = 0.0005
 # Maximum number of steps in BPTT
 GRAD_STEPS = -1
 # Number of epochs for training
-NUM_EPOCHS = 30
+NUM_EPOCHS = 10
 # do validation every VALIDATION_FREQ iterations
-VALIDATION_FREQ = 25
+VALIDATION_FREQ = 100
 # maximum word length for character model
 MAX_WORD_LEN = 10
 # annealing every x epochs
-ANNEAL = 4
+ANNEAL = 1
 # early stopping
-STOPPING = False
+STOPPING = True
 
 # dataset params
 def get_params(dataset):
@@ -61,14 +61,14 @@ wdw_params = {
         }
 
 cnn_params = {
-        'nhidden'   :   128,
+        'nhidden'   :   240,
         'char_dim'  :   0,
         'dropout'   :   0.2,
         'word2vec'  :   'word2vec/word2vec_glove.txt',
         'train_emb' :   1,
         'use_feat'  :   0,
-        'num_coref' :   10,
-        'coref_dim' :   0,
+        'num_coref' :   100,
+        'coref_dim' :   16,
         }
 
 dailymail_params = {
@@ -90,14 +90,14 @@ cbtne_params = {
         }
 
 lambada_params = {
-     'nhidden'   :   240,
+     'nhidden'   :   256,
         'char_dim'  :   0,
      'dropout'   :   0.2,
         'word2vec'  :   'word2vec/word2vec_glove.txt',
         'train_emb' :   1,
      'use_feat'  :   0,
         'num_coref' :   14,
-     'coref_dim' :   16,
+     'coref_dim' :   0,
         }
 
 babi_params = {

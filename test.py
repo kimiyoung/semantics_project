@@ -4,7 +4,7 @@ import cPickle as pkl
 import shutil
 
 from config import *
-from model import GAReader, GAReaderpp_prior, StanfordAR, GAReaderpp, GAReaderppp, GAKnowledge
+from model import GAReader, GAReaderpp_prior, StanfordAR, GAReaderpp, GAReaderppp, GAKnowledge, GAReaderCoref
 from model import GAReaderpropnc
 from model import DeepASReader, DeepAoAReader
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
@@ -44,7 +44,7 @@ def main(load_path, params, mode='test'):
     d_pr = np.zeros((len(batch_loader_test.questions),
         batch_loader_test.max_doc_len)).astype('float32')
     fids, attns = [], []
-    total_loss, total_acc, n = 0., 0., 0.
+    total_loss, total_acc, n = 0., 0., 0
     for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, crd, crq, fnames in batch_loader_test:
         outs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, crd, crq)
         loss, acc, probs, doc_probs = outs[:4]

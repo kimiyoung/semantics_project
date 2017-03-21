@@ -26,6 +26,21 @@ class Data:
 
 class DataPreprocessor:
 
+    def preprocess_analysis(self, question_dir):
+        """ for loading lambada analysis file """
+        vocab_f = os.path.join(question_dir,"vocab_coref.txt")
+        wc_f = os.path.join(question_dir,"wc_coref.npy")
+        word_dictionary, char_dictionary, num_entities = \
+                self.make_dictionary(question_dir, vocab_file=vocab_f)
+        word_counts = self.word_count(question_dir, word_dictionary, wc_f)
+        dictionary = (word_dictionary, char_dictionary)
+        print "preparing test data ..."
+        test = self.parse_all_files('../lambada/lambada-analysis/'+ "/test_coref", 
+                dictionary, False)
+
+        data = Data(dictionary, num_entities, [], [], test, word_counts)
+        return data
+
     def preprocess(self, question_dir, no_training_set=False, use_chars=True):
         """
         preprocess all data into a standalone Data object.
