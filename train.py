@@ -105,7 +105,7 @@ def main(save_path, params):
         if epoch >=2 and epoch%ANNEAL==0:
             m.anneal()
         # stopping criterion
-        if STOPPING and not new_max:
+        if (STOPPING and not new_max) or val_acc>0.99:
             break
 
     # test
