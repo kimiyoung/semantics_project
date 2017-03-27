@@ -58,7 +58,7 @@ save_path = ('crfreader_experiments_babi-v2/'+params['model']+'/'+params['datase
         #'_subsample%d'%params['subsample']+
         '_seed%d'%params['seed']+'_use-feat%d'%params['use_feat']+
         #'_traincut%.1f'%params['train_cut']+'_gf%s'%params['gating_fn']+
-        '_corefdim%d'%params['coref_dim']+'/')
+        '_rdims%s'%'.'.join([str(rd) for rd in params['relation_dims']])+'/')
 if not os.path.exists(save_path): os.makedirs(save_path)
 #else: sys.exit()
 

@@ -6,7 +6,7 @@ import cPickle as pkl
 
 from config import *
 #from model import GAReaderSelect, GAReaderSelectTied, GAReaderpp, GAKnowledge, GAReaderCoref, GAReaderSelectCoref, GAReaderppAblation, GAReaderSelectAblation, GAReaderppCoref
-from model import BiGRU, GA
+from model import BiGRU, GA, GAMage
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 def main(save_path, params):

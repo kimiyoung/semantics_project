@@ -56,8 +56,11 @@ wdw_params = {
         'word2vec'  :   'word2vec/word2vec_glove.txt',
         'train_emb' :   0,
         'use_feat'  :   1,
-        'num_coref' :   76,
-        'coref_dim' :   0,
+        #'num_coref' :   76,
+        #'coref_dim' :   0,
+        'max_chains' :   77,
+        'num_relations' :   4,
+        'relation_dims' :   [64,64,64,64],
         }
 
 cnn_params = {
@@ -128,6 +131,7 @@ debug_params = {
         'word2vec'  :   None,
         'train_emb' :   1,
         'use_feat'  :   0,
-        'num_coref' :   76,
-        'coref_dim' :   2,
+        'max_chains' :   77,
+        'num_relations' :   4,
+        'relation_dims' :   [2,2,2,2],
         }

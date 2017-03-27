@@ -5,7 +5,17 @@ import cPickle as pkl
 def batched_matmul(x,y):
     # x : B x M x N, y : B x N x Q
     fn = lambda x: tf.matmul(x[0], x[1])
-    return tf.map_fn(fn, [x,y], dtype=tf.float32) # B x M x Q
+    return tf.map_fn(fn, [x,y], dtype=tf.float32, parallel_iterations=1000) # B x M x Q
+
+def batched_vecmatmul(x,y):
+    # x: B x M, y : B x M x N
+    fn = lambda x: tf.matmul(tf.expand_dims(x[0],axis=0), x[1])
+    return tf.squeeze(tf.map_fn(fn, [x,y], dtype=tf.float32, parallel_iterations=1000)) # B x N
+
+def batched_3d4dmul(i1, i2):
+    # i1: B x C x Dr, i2: B x C x Dr x Din, out :  B x C x Din
+    fn = lambda x: tf.reduce_sum(tf.expand_dims(x[0],axis=2)*x[1], axis=1)
+    return tf.map_fn(fn, [i1,i2], dtype=tf.float32)
 
 def glorot(d1,d2):
     return np.sqrt(6./(d1+d2))
@@ -87,21 +97,25 @@ class MageRNN(object):
 
     During construction provide the parameters for initializing the variables.
         "num_relations" :   total number of relations,
-        "output_dim"    :   output dimensionality for each relation type,
+        "relation_dims" :   list of output dimensionality for each relation type,
         "input_dim"     :   input dimensionality
         "max_chains"    :   maximum number of chains
+        "reverse"       :   set to true to process the sequence in reverse
 
     compute() takes the three placeholders for the tensors described above, and optionally the
     initializer for the recurrence, and outputs
     another placeholder for the output of the layer.
     """
 
-    def __init__(self, num_relations, input_dim, output_dim, max_chains):
+    def __init__(self, num_relations, input_dim, relation_dims, max_chains, 
+            reverse=False):
         self.num_relations = num_relations
-        self.rdims = output_dim
+        self.rdims = relation_dims
+        self.max_rdim = max(relation_dims) # Dr
         self.input_dim = input_dim
-        self.output_dim = self.rdims*self.num_relations
+        self.output_dim = sum(self.rdims)
         self.max_chains = max_chains
+        self.reverse = reverse
 
         # initialize gates
         def _gate_params(name):
@@ -109,8 +123,9 @@ class MageRNN(object):
             gate["W"] = tf.Variable(tf.random_normal((self.input_dim,self.output_dim), 
                 mean=0.0, stddev=glorot(self.input_dim,self.output_dim)),
                 name="W"+name, dtype=tf.float32)
-            gate["U"] = tf.Variable(tf.random_normal((self.num_relations,self.rdims,self.output_dim),
-                mean=0.0, stddev=glorot(self.rdims,self.output_dim)),
+            gate["U"] = tf.Variable(tf.random_normal(
+                (self.num_relations,self.max_rdim,self.output_dim),
+                mean=0.0, stddev=glorot(self.max_rdim,self.output_dim)),
                 name="U"+name, dtype=tf.float32)
             gate["b"] = tf.Variable(tf.zeros((self.output_dim,)), 
                 name="b"+name, dtype=tf.float32)
@@ -119,18 +134,27 @@ class MageRNN(object):
         self.updategate = _gate_params("u")
         self.hiddengate = _gate_params("h")
 
+        # construct mask for relation dims
+        mlist = []
+        for i in range(len(self.rdims)):
+            on = self.rdims[i]
+            off = self.max_rdim - self.rdims[i]
+            mlist.append(np.asarray([1]*on+[0]*off, dtype='float32'))
+        self.rmask = tf.Variable(np.vstack(mlist), trainable=False) # R x Dr
+
         # initialize attention params
-        self.Rkeys = tf.Variable(tf.random_normal((self.num_relations,self.rdims),
+        self.Rkeys = tf.Variable(tf.random_normal((self.num_relations,self.max_rdim),
             mean=0.0, stddev=0.1),
             name="Rkeys", dtype=tf.float32) # R x Dr
-        self.Watt = tf.Variable(tf.random_normal((self.rdims,self.input_dim),
-            mean=0.0, stddev=glorot(self.rdims,self.input_dim)),
+        self.Watt = tf.Variable(tf.random_normal((self.max_rdim,self.input_dim),
+            mean=0.0, stddev=glorot(self.max_rdim,self.input_dim)),
             name="Watt", dtype=tf.float32) # Dr x Din
-        self.Uatt = tf.Variable(tf.random_normal((self.rdims,self.input_dim),
-            mean=0.0, stddev=glorot(self.rdims,self.input_dim)),
-            name="Uatt", dtype=tf.float32) # Dr x Din
+        self.Uatt = tf.Variable(tf.random_normal(
+            (self.num_relations,self.max_rdim,self.input_dim),
+            mean=0.0, stddev=glorot(self.max_rdim,self.input_dim)),
+            name="Uatt", dtype=tf.float32) # R x Dr x Din
 
-    def compute(self, X, M, Ei, Eo, Ri, Ro, init=None):
+    def compute(self, X, M, Ei, Eo, Ri, Ro, init=None, mem_init=None):
         # reshape for scan
         Xre = tf.transpose(X, perm=(1,0,2))
         Mre = tf.transpose(M, perm=(1,0))
@@ -139,53 +163,53 @@ class MageRNN(object):
         Rire = tf.transpose(Ri, perm=(1,0,2))
         Rore = tf.transpose(Ro, perm=(1,0,2))
 
+        if self.reverse:
+            Xre = tf.reverse(Xre, axis=[0])
+            Mre = tf.reverse(Mre, axis=[0])
+            Eire = tf.reverse(Eire, axis=[0])
+            Eore = tf.reverse(Eore, axis=[0])
+            Rire = tf.reverse(Rire, axis=[0])
+            Rore = tf.reverse(Rore, axis=[0])
+
         # update
-        if init is None: init = tf.zeros((tf.shape(X)[0], self.output_dim), dtype=tf.float32)
-        mem_init = tf.zeros((tf.shape(X)[0], self.max_chains, self.rdims), dtype=tf.float32)
+        if init is None: init = tf.zeros((tf.shape(X)[0], self.output_dim), 
+                dtype=tf.float32)
+        if mem_init is None: mem_init = tf.zeros(
+                (tf.shape(X)[0], self.max_chains, self.max_rdim), dtype=tf.float32)
         outs, mems = tf.scan(self._step, (Xre, Mre, Eire, Eore, Rire, Rore), 
                 initializer=(init,mem_init)) # N x B x Dout
+        outlist = []
+        st = 0
+        for i in range(len(self.rdims)):
+            outlist.append(outs[:,:,st:st+self.rdims[i]])
+            st += self.rdims[i]
+        outs = tf.concat(outlist, axis=2) # N x B x \sum(Dr)
+
+        if self.reverse:
+            outs = tf.reverse(outs, axis=[0])
+            mems = tf.reverse(mems, axis=[0])
 
         return tf.transpose(outs, perm=(1,0,2)), tf.transpose(mems, perm=(1,0,2,3))
 
-    def _mem_read(self, e):
-        # e : B x R x C
-        N = tf.shape(self.memory)[1]
-        e1hot = tf.one_hot(e, N, axis=1) # B x N x R x C
-        e_r = tf.expand_dims(e1hot, axis=4) # B x N x R x C x 1
-        m_r = tf.expand_dims(self.memory, axis=3) # B x N x R x 1 x Dr
-        return tf.reduce_sum(e_r*m_r, axis=[1,3]) # B x R x Dr
-
-    def _mem_write(self, m, i):
-        # m : B x Dout
-        m_r = tf.reshape(m, [tf.shape(m)[0],self.num_relations, self.rdims]) # B x R x Dr
-        s1 = tf.slice(self.memory, [0,0,0,0], [-1,i+1,-1,-1]) # B x (i+1) x R x Dr
-        s2 = tf.slice(self.memory, [0,i+2,0,0], [-1,-1,-1,-1]) # B x (N-i-1) x R x Dr
-        self.memory.assign(tf.concat([s1,tf.expand_dims(m_r,axis=1),s2], axis=1))
-        self.memory.set_shape([None,None,self.num_relations, self.rdims])
-
-    def _attention(self, x, c, e, r):
+    def _attention(self, x, c, e, r, md):
         EPS = 1e-7
-        # x : B x Din, m : B, c : B x C x Dr, e : B x C, r : B x C
-        rd = tf.nn.embedding_lookup(self.Rkeys, r) # B x C x Dr
-        v = tf.tanh(tf.tensordot(c, self.Watt, [[2],[0]]) + 
-                tf.tensordot(rd, self.Uatt, [[2],[0]])) # B x C x Din
+        c_r = tf.expand_dims(c*md, axis=2)*tf.expand_dims(r, axis=3) # B x C x R x Dr
+        r_r = tf.tensordot(r, self.Rkeys, axes=[[2],[0]]) # B x C x Dr
+        prodsc = tf.tensordot(c_r, self.Uatt, axes=[[2,3],[0,1]]) # B x C x Din
+        prodsr = tf.tensordot(r_r, self.Watt, axes=[[2],[0]]) # B x C x Din
+        v = tf.tanh(prodsr + prodsc) # B x C x Din
         actvs = tf.reduce_sum(tf.expand_dims(x, axis=1)*v, axis=2) # B x C
         alphas = tf.nn.softmax(actvs) # B x C
         alphas_m = alphas*tf.to_float(e) + EPS # mask
         return alphas_m/tf.reduce_sum(alphas_m, keep_dims=True)
 
-    @staticmethod
-    def _getU(r, gate):
-        # r : B x C, gate["U"] : R x Dr x Dout
-        return tf.gather(gate["U"], r) # B x C x Dr x Dout
+    def _hid_to_hid(self, h, r, gate, md):
+        h_r = tf.expand_dims(h*md, axis=2)*tf.expand_dims(r, axis=3) # B x C x R x Dr
+        prods = tf.tensordot(h_r, gate["U"], axes=[[2,3],[0,1]])
+        return tf.reduce_sum(prods, axis=1) # B x Dout
 
-    def _hid_to_hid(self, h, r, gate):
-        U = self._getU(r, gate) # B x C x Dr x Dout
-        h_r = tf.expand_dims(h, axis=3) # B x C x Dr x 1
-        return tf.reduce_sum(h_r*U, axis=[1,2]) # B x Dout
-
-    def _hid_prev(self, x, c, e, r):
-        alphas = self._attention(x, c, e, r) # B x C
+    def _hid_prev(self, x, c, e, r, md):
+        alphas = self._attention(x, c, e, r, md) # B x C
         h = tf.expand_dims(alphas, axis=2)*c # B x C x Dr
         return h
 
@@ -197,7 +221,7 @@ class MageRNN(object):
         hnew = self._gru_cell(x, mprev, ei, ri, self.resetgate, self.updategate,
                 self.hiddengate) # B x Dout
         hnew_r = tf.reshape(hnew, 
-                [tf.shape(x)[0], self.num_relations, self.rdims]) # B x R x Dr
+                [tf.shape(x)[0], self.num_relations, self.max_rdim]) # B x R x Dr
         ro1hot = tf.one_hot(ro, self.num_relations, axis=2) # B x C x R
         mnew = tf.reduce_sum(
                 tf.expand_dims(hnew_r, axis=1)*tf.expand_dims(ro1hot, axis=3), 
@@ -213,15 +237,17 @@ class MageRNN(object):
         return hnew, mnew
 
     def _gru_cell(self, x, c, e, ri, rgate, ugate, hgate):
-        prev = self._hid_prev(x, c, e, ri) # B x C x Dr
+        r1hot = tf.one_hot(ri, self.num_relations) # B x C x R
+        md = tf.tensordot(r1hot, self.rmask, axes=[[2],[0]]) # B x C x Dr
+        prev = self._hid_prev(x, c, e, r1hot, md) # B x C x Dr
         r = tf.sigmoid(tf.matmul(x,rgate["W"]) + \
-                self._hid_to_hid(prev, ri, rgate) + \
+                self._hid_to_hid(prev, r1hot, rgate, md) + \
                 rgate["b"])
         z = tf.sigmoid(tf.matmul(x,ugate["W"]) + \
-                self._hid_to_hid(prev, ri, ugate) + \
+                self._hid_to_hid(prev, r1hot, ugate, md) + \
                 ugate["b"])
         ht = tf.tanh(tf.matmul(x,hgate["W"]) + \
-                r*self._hid_to_hid(prev, ri, hgate) + \
+                r*self._hid_to_hid(prev, r1hot, hgate, md) + \
                 hgate["b"])
         hp = tf.tile(tf.reduce_sum(prev, axis=1), [1,self.num_relations]) # B x Dout
         h = (1.-z)*hp + z*ht
@@ -231,7 +257,7 @@ def test_magernn():
     graph = tf.Graph()
     with graph.as_default():
         tf.set_random_seed(0)
-        mage = MageRNN(2,2,2,2)
+        mage = MageRNN(2,2,[2,2],2)
         with tf.Session() as sess:
             tf.global_variables_initializer().run()
             def _get_gate(gate):
