@@ -5,7 +5,8 @@ import shutil
 import cPickle as pkl
 
 from config import *
-from model import GAReaderSelect, GAReaderSelectTied, GAReaderpp, GAKnowledge, GAReaderCoref, GAReaderSelectCoref, GAReaderppAblation, GAReaderSelectAblation, GAReaderppCoref
+#from model import GAReaderSelect, GAReaderSelectTied, GAReaderpp, GAKnowledge, GAReaderCoref, GAReaderSelectCoref, GAReaderppAblation, GAReaderSelectAblation, GAReaderppCoref
+from model import BiGRU, GA
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 def main(save_path, params):
@@ -79,7 +80,7 @@ def main(save_path, params):
                         cl, crd, crq, fnames) in batch_loader_val:
                     outs = m.validate(dw, dt, qw, qt, c, a, 
                             m_dw, m_qw, tt, tm, m_c, cl, crd, crq)
-                    loss, acc, probs, doc_probs = outs[:4]
+                    loss, acc, probs = outs[:3]
 
                     bsize = dw.shape[0]
                     total_loss += bsize*loss

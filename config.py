@@ -51,7 +51,7 @@ cbtcn_params = {
 
 wdw_params = {
         'nhidden'   :   128,
-        'char_dim'  :   25,
+        'char_dim'  :   0,
         'dropout'   :   0.3,
         'word2vec'  :   'word2vec/word2vec_glove.txt',
         'train_emb' :   0,
