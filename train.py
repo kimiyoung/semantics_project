@@ -21,7 +21,8 @@ def main(save_path, params):
 
     use_chars = params['char_dim']>0
     dp = DataPreprocessor.DataPreprocessor()
-    data = dp.preprocess(dataset, no_training_set=False, use_chars=use_chars)
+    data = dp.preprocess(dataset, max_chains=params['max_chains'], 
+            no_training_set=False, use_chars=use_chars)
     if data.validation[0][6]==-1:
         # no clozes
         cloze=False
@@ -30,10 +31,12 @@ def main(save_path, params):
 
     print("building minibatch loaders ...")
     batch_loader_train = MiniBatchLoader.MiniBatchLoader(data.training, BATCH_SIZE, 
-            sample=train_cut)
-    batch_loader_val = MiniBatchLoader.MiniBatchLoader(data.validation, BATCH_SIZE)
-    batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.test, BATCH_SIZE)
-    num_candidates = batch_loader_train.max_num_cand
+            data.max_num_cand, sample=train_cut)
+    batch_loader_val = MiniBatchLoader.MiniBatchLoader(data.validation, BATCH_SIZE, 
+            data.max_num_cand)
+    batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.test, BATCH_SIZE, 
+            data.max_num_cand)
+    num_candidates = data.max_num_cand
 
     print("building network ...")
     W_init, embed_dim, = Helpers.load_word2vec_embeddings(data.dictionary[0], word2vec)

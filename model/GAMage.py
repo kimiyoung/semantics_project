@@ -1,8 +1,10 @@
 import tensorflow as tf
 import numpy as np
+#from tensorflow.python.client import timeline
 from tools import sub_sample
 from config import *
 from tflayers import *
+#import sys
 
 EPS = 1e-7
 
@@ -27,7 +29,8 @@ class Model:
         self.max_chains = params['max_chains']
         self.num_relations = params['num_relations']
         self.relation_dims = params['relation_dims']
-        self.nhidden = sum(self.relation_dims)
+        self.nhidden = self.num_relations*self.relation_dims
+        self.concat = params['concat']
         seed = params['seed']
         K = params['nlayers']
 
@@ -36,19 +39,19 @@ class Model:
             tf.set_random_seed(seed)
             # placeholders
             self.doc = tf.placeholder(tf.int32, shape=(None, None))
-            self.docei = tf.placeholder(tf.int32, shape=(None, None, self.max_chains))
-            self.doceo = tf.placeholder(tf.int32, shape=(None, None, self.max_chains))
+            self.docei = tf.placeholder(tf.float32, shape=(None, None, self.max_chains))
+            self.doceo = tf.placeholder(tf.float32, shape=(None, None, self.max_chains))
             self.docri = tf.placeholder(tf.int32, shape=(None, None, self.max_chains))
             self.docro = tf.placeholder(tf.int32, shape=(None, None, self.max_chains))
             self.qry = tf.placeholder(tf.int32, shape=(None, None))
-            self.qryei = tf.placeholder(tf.int32, shape=(None, None, self.max_chains))
-            self.qryeo = tf.placeholder(tf.int32, shape=(None, None, self.max_chains))
+            self.qryei = tf.placeholder(tf.float32, shape=(None, None, self.max_chains))
+            self.qryeo = tf.placeholder(tf.float32, shape=(None, None, self.max_chains))
             self.qryri = tf.placeholder(tf.int32, shape=(None, None, self.max_chains))
             self.qryro = tf.placeholder(tf.int32, shape=(None, None, self.max_chains))
             self.cand = tf.placeholder(tf.int32, shape=(None, None, num_cand))
-            self.dmask = tf.placeholder(tf.int32, shape=(None, None))
-            self.qmask = tf.placeholder(tf.int32, shape=(None, None))
-            self.cmask = tf.placeholder(tf.int32, shape=(None, None))
+            self.dmask = tf.placeholder(tf.float32, shape=(None, None))
+            self.qmask = tf.placeholder(tf.float32, shape=(None, None))
+            self.cmask = tf.placeholder(tf.float32, shape=(None, None))
             self.ans = tf.placeholder(tf.int32, shape=(None))
             self.feat = tf.placeholder(tf.int32, shape=(None, None))
             self.cloze = tf.placeholder(tf.int32, shape=(None))
@@ -79,9 +82,9 @@ class Model:
                 inqry = self.embed_dim if i==0 else 2*self.nhidden
                 # forward
                 fdoc = MageRNN(self.num_relations, indoc, self.relation_dims, 
-                        self.max_chains)
+                        self.max_chains, concat=self.concat)
                 fqry = MageRNN(self.num_relations, inqry, self.relation_dims, 
-                        self.max_chains)
+                        self.max_chains, concat=self.concat)
                 fdout, dmem = fdoc.compute(doc_emb, self.dmask, self.docei, self.doceo, 
                         self.docri, self.docro) # B x N x Dh
                 fqout, qmem = fqry.compute(qry_emb, self.qmask, self.qryei, self.qryeo, 
@@ -89,42 +92,46 @@ class Model:
                 # backward
                 # flip masks o<->i, mirror relation types
                 bdoc = MageRNN(self.num_relations, indoc, self.relation_dims, 
-                        self.max_chains, reverse=True)
+                        self.max_chains, reverse=True, concat=self.concat)
                 bqry = MageRNN(self.num_relations, inqry, self.relation_dims, 
-                        self.max_chains, reverse=True)
+                        self.max_chains, reverse=True, concat=self.concat)
+                #bqout, qmem = bqry.compute(qry_emb, self.qmask, self.qryeo, self.qryei, 
+                #        self.num_relations-1-self.qryri, 
+                #        self.num_relations-1-self.qryro) # B x Q x Dh
+                #bdout, dmem = bdoc.compute(doc_emb, self.dmask, self.doceo, self.docei, 
+                #        self.num_relations-1-self.docri, 
+                #        self.num_relations-1-self.docro, 
+                #        mem_init=qmem[:,-1,:,:]) # B x N x Dh
                 bqout, qmem = bqry.compute(qry_emb, self.qmask, self.qryeo, self.qryei, 
-                        self.num_relations-1-self.qryri, 
-                        self.num_relations-1-self.qryro) # B x Q x Dh
+                        self.qryro, self.qryri)
                 bdout, dmem = bdoc.compute(doc_emb, self.dmask, self.doceo, self.docei, 
-                        self.num_relations-1-self.docri, 
-                        self.num_relations-1-self.docro, 
-                        mem_init=qmem[:,-1,:,:]) # B x N x Dh
+                        self.docro, self.docri, mem_init=qmem[:,-1,:,:]) # B x N x Dh
                 doc_emb = tf.concat([fdout, bdout], axis=2) # B x N x 2Dh
                 qry_emb = tf.concat([fqout, bqout], axis=2) # B x Q x 2Dh
                 # gated attention
                 if i<K-1:
                     qshuf = tf.transpose(qry_emb, perm=(0,2,1)) # B x 2Dh x Q
-                    M = batched_matmul(doc_emb, qshuf) # B x N x Q
-                    alphas = tf.nn.softmax(M)*tf.expand_dims(tf.to_float(self.qmask), 
+                    M = tf.matmul(doc_emb, qshuf) # B x N x Q
+                    alphas = tf.nn.softmax(M)*tf.expand_dims(self.qmask, 
                             axis=1)
                     alphas = alphas/tf.reduce_sum(alphas, 
                             axis=2, keep_dims=True) # B x N x Q
-                    gating = batched_matmul(alphas, qry_emb) # B x N x 2Dh
+                    gating = tf.matmul(alphas, qry_emb) # B x N x 2Dh
                     doc_emb = doc_emb*gating # B x N x 2Dh
                     doc_emb = tf.nn.dropout(doc_emb, self.keep_prob) 
             # attention sum
             if cloze:
-                cl = tf.expand_dims(tf.one_hot(self.cloze, tf.shape(self.qry)[1]), axis=2) # B x Q x 1
-                q = tf.reduce_sum(cl*qry_emb, axis=1) # B x 2Dh
+                cl = tf.one_hot(self.cloze, tf.shape(self.qry)[1]) # B x Q
+                q = tf.squeeze(tf.matmul(tf.expand_dims(cl,axis=1), qry_emb),axis=1) # B x 2Dh
             else:
                 mid = self.nhidden
                 q = tf.concat([qry_emb[:,-1,:mid], qry_emb[:,0,mid:]], axis=1) # B x 2Dh
-            p = tf.reduce_sum(doc_emb*tf.expand_dims(q, axis=1), axis=2) # B x N
+            p = tf.squeeze(tf.matmul(doc_emb, tf.expand_dims(q,axis=2)),axis=2) # B x N
             probs = tf.nn.softmax(p) # B x N
-            probm = probs*tf.to_float(self.cmask) + EPS
+            probm = probs*self.cmask + EPS
             probm = probm/tf.reduce_sum(probm, axis=1, keep_dims=True) # B x N
-            self.probc = tf.reduce_sum(tf.expand_dims(probm, axis=2)*tf.to_float(self.cand), 
-                    axis=1) # B x C
+            self.probc = tf.squeeze(
+                    tf.matmul(tf.expand_dims(probm,axis=1), tf.to_float(self.cand)),axis=1) # B x C
 
             # loss
             t1hot = tf.one_hot(self.ans, num_cand) # B x C
@@ -155,10 +162,10 @@ class Model:
         # coref : B x N \in {0,...,MAX_CHAINS}
         # edge masks
         row_idx, col_idx = np.where(coref!=0)
-        ei = np.zeros((coref.shape[0], coref.shape[1], self.max_chains), dtype='int32')
+        ei = np.zeros((coref.shape[0], coref.shape[1], self.max_chains), dtype='float32')
         ei[row_idx,col_idx,coref[row_idx,col_idx]] = 1 # coref edges
-        ri = np.copy(ei) # relation idx
-        ro = np.copy(ei)
+        ri = np.copy(ei).astype('float32')# relation idx
+        ro = np.copy(ei).astype('float32')
         ei[:,:,0] = 1 # sequential edges
         eo = np.copy(ei)
         return ei, eo, ri, ro
@@ -167,6 +174,8 @@ class Model:
         f = prepare_input(dw,qw)
         dei, deo, dri, dro = self.get_graph(crd)
         qei, qeo, qri, qro = self.get_graph(crq)
+        #run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+        #run_metadata = tf.RunMetadata()
         loss, acc, probs, _ = self.session.run([self.loss, self.acc, self.probc, self.train_op], 
                 feed_dict = {
                     self.doc : dw[:,:,0],
@@ -180,15 +189,25 @@ class Model:
                     self.qryri : qri,
                     self.qryro : qro,
                     self.cand : c,
-                    self.dmask : m_dw,
-                    self.qmask : m_qw,
-                    self.cmask : m_c,
+                    self.dmask : m_dw.astype('float32'),
+                    self.qmask : m_qw.astype('float32'),
+                    self.cmask : m_c.astype('float32'),
                     self.ans : a,
                     self.feat : f,
                     self.cloze : cl,
                     self.keep_prob : 1.-self.dropout,
                     self.lrate : self.learning_rate,
                     })
+                #options = run_options,
+                #run_metadata = run_metadata)
+        #tl = timeline.Timeline(run_metadata.step_stats)
+        #ctf = tl.generate_chrome_trace_format(show_dataflow=False)
+        #with open('timeline.json', 'w') as f:
+        #    f.write(ctf)
+        #print(tl.generate_chrome_trace_format(show_memory=True))
+        #trace_file = tf.gfile.Open(name='timeline', mode='w')
+        #trace_file.write(tl.generate_chrome_trace_format(show_memory=True))
+        #sys.exit()
         return loss, acc, probs
 
     def validate(self, dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, crd, crq):
@@ -209,9 +228,9 @@ class Model:
                     self.qryri : qri,
                     self.qryro : qro,
                     self.cand : c,
-                    self.dmask : m_dw,
-                    self.qmask : m_qw,
-                    self.cmask : m_c,
+                    self.dmask : m_dw.astype('float32'),
+                    self.qmask : m_qw.astype('float32'),
+                    self.cmask : m_c.astype('float32'),
                     self.ans : a,
                     self.feat : f,
                     self.cloze : cl,
@@ -220,10 +239,10 @@ class Model:
         return loss, acc, probs, drep, qrep, dprobs
     
     def save_model(self, save_path):
-        base_path = save_path.rsplit('/',1)[0]
+        base_path = save_path.rsplit('/',1)[0]+'/'
         self.saver.save(self.session, base_path+'model')
 
     def load_model(self, load_path):
-        base_path = load_path.rsplit('/',1)[0]
+        base_path = load_path.rsplit('/',1)[0]+'/'
         new_saver = tf.train.import_meta_graph(base_path+'model.meta')
         new_saver.restore(self.session, tf.train.latest_checkpoint(base_path))

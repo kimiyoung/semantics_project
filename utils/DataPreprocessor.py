@@ -23,6 +23,7 @@ class Data:
         self.num_entities = num_entities
         self.inv_dictionary = {v:k for k,v in dictionary[0].items()}
         self.word_counts = word_counts
+        self.max_num_cand = max(map(lambda x:len(x[3]), training+validation+test))
 
 class DataPreprocessor:
 
@@ -41,7 +42,8 @@ class DataPreprocessor:
         data = Data(dictionary, num_entities, [], [], test, word_counts)
         return data
 
-    def preprocess(self, question_dir, no_training_set=False, use_chars=True):
+    def preprocess(self, question_dir, max_chains=MAX_COREF, 
+            no_training_set=False, use_chars=True):
         """
         preprocess all data into a standalone Data object.
         the training set will be left out (to save debugging time) when no_training_set
@@ -58,12 +60,13 @@ class DataPreprocessor:
         else:
             print "preparing training data ..."
             training = self.parse_all_files(question_dir + "/training_coref", 
-                    dictionary, use_chars)
+                    dictionary, use_chars, max_chains)
         print "preparing validation data ..."
         validation = self.parse_all_files(question_dir + "/validation_coref", 
-                dictionary, use_chars)
+                dictionary, use_chars, max_chains)
         print "preparing test data ..."
-        test = self.parse_all_files(question_dir + "/test_coref", dictionary, use_chars)
+        test = self.parse_all_files(question_dir + "/test_coref", dictionary, use_chars, 
+                max_chains)
 
         data = Data(dictionary, num_entities, training, validation, test, word_counts)
         return data
@@ -228,7 +231,7 @@ class DataPreprocessor:
 
         return doc_words, qry_words, ans, cand, doc_chars, qry_chars, cloze
 
-    def parse_one_file(self, fname, dictionary, use_chars):
+    def parse_one_file(self, fname, dictionary, use_chars, max_chains):
         """
         parse a *.question file into tuple(document, query, answer, filename)
         """
@@ -249,7 +252,7 @@ class DataPreprocessor:
                 split = raw[8:].index('\n')
                 cand_raw = map(lambda x:x.strip().split(':')[0].split(), 
                         raw[8:8+split]) # candidate answers
-                coref = [_parse_coref(line.rstrip()) for line in raw[9+split:9+split+MAX_COREF]]
+                coref = [_parse_coref(line.rstrip()) for line in raw[9+split:9+split+(max_chains-1)]]
             except ValueError:
                 # no corefs
                 cand_raw = map(lambda x:x.strip().split(':')[0].split(), 
@@ -265,7 +268,7 @@ class DataPreprocessor:
         return self.process_question(doc_raw, qry_raw, ans_raw, cand_raw, w_dict, c_dict,
                 use_chars, fname) + (coref,)
 
-    def parse_data_file(self, fdata, fcoref, dictionary, use_chars, stops):
+    def parse_data_file(self, fdata, fcoref, dictionary, use_chars, stops, max_chains):
         """
         parse a *.data file into list of tuple(document, query, answer, filename)
         """
@@ -287,7 +290,9 @@ class DataPreprocessor:
                             for mi in m.split('|')])
                     return set([int(t.rsplit(':',1)[1])-1 for t in all_tokens])
                 all_coref = corefs.rstrip()
-                if all_coref: coref = [_parse_coref(line) for line in all_coref.split('\t')]
+                if all_coref: 
+                    coref = [_parse_coref(line) 
+                            for line in all_coref.split('\t')[:max_chains-1]]
                 else: coref = []
                 if not any(aa in doc_raw for aa in ans_raw.split()):
                     print "answer not in doc %s" % ii
@@ -298,7 +303,7 @@ class DataPreprocessor:
 
         return questions
 
-    def parse_all_files(self, directory, dictionary, use_chars):
+    def parse_all_files(self, directory, dictionary, use_chars, max_chains):
         """
         parse all files under the given directory into a list of questions,
         where each element is in the form of (document, query, answer, filename)
@@ -308,12 +313,12 @@ class DataPreprocessor:
             basedir = directory.rsplit('/',1)[0]
             stops = open(basedir+'/shortlist-stopwords.txt').read().splitlines()
             questions = self.parse_data_file(directory+'.data', directory+'.coref', 
-                    dictionary, use_chars, stops)
+                    dictionary, use_chars, stops, max_chains)
         else:
             all_files = glob.glob(directory + '/*.question')
             questions = []
             for f in all_files:
-                qn = self.parse_one_file(f, dictionary, use_chars)
+                qn = self.parse_one_file(f, dictionary, use_chars, max_chains)
                 if qn is not None: questions.append(qn+(f,))
         return questions
 

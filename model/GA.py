@@ -80,25 +80,25 @@ class Model:
                 # gated attention
                 if i<K-1:
                     qshuf = tf.transpose(qry_emb, perm=(0,2,1)) # B x 2Dh x Q
-                    M = batched_matmul(doc_emb, qshuf) # B x N x Q
+                    M = tf.matmul(doc_emb, qshuf) # B x N x Q
                     alphas = tf.nn.softmax(M)*tf.expand_dims(tf.to_float(self.qmask), axis=1)
                     alphas = alphas/tf.reduce_sum(alphas, axis=2, keep_dims=True) # B x N x Q
-                    gating = batched_matmul(alphas, qry_emb) # B x N x 2Dh
+                    gating = tf.matmul(alphas, qry_emb) # B x N x 2Dh
                     doc_emb = doc_emb*gating # B x N x 2Dh
                     doc_emb = tf.nn.dropout(doc_emb, self.keep_prob) 
             # attention sum
             if cloze:
-                cl = tf.expand_dims(tf.one_hot(self.cloze, tf.shape(self.qry)[1]), axis=2) # B x Q x 1
-                q = tf.reduce_sum(cl*qry_emb, axis=1) # B x 2Dh
+                cl = tf.one_hot(self.cloze, tf.shape(self.qry)[1]) # B x Q
+                q = tf.squeeze(tf.matmul(tf.expand_dims(cl,axis=1), qry_emb),axis=1) # B x 2Dh
             else:
                 mid = self.nhidden
                 q = tf.concat([qry_emb[:,-1,:mid], qry_emb[:,0,mid:]], axis=1) # B x 2Dh
-            p = tf.reduce_sum(doc_emb*tf.expand_dims(q, axis=1), axis=2) # B x N
+            p = tf.squeeze(tf.matmul(doc_emb, tf.expand_dims(q,axis=2)),axis=2) # B x N
             probs = tf.nn.softmax(p) # B x N
             probm = probs*tf.to_float(self.cmask) + EPS
             probm = probm/tf.reduce_sum(probm, axis=1, keep_dims=True) # B x N
-            self.probc = tf.reduce_sum(tf.expand_dims(probm, axis=2)*tf.to_float(self.cand), 
-                    axis=1) # B x C
+            self.probc = tf.squeeze(
+                    tf.matmul(tf.expand_dims(probm,axis=1), tf.to_float(self.cand)),axis=1) # B x C
 
             # loss
             t1hot = tf.one_hot(self.ans, num_cand) # B x C

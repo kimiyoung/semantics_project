@@ -6,7 +6,7 @@ from config import MAX_WORD_LEN
 
 class MiniBatchLoader():
 
-    def __init__(self, questions, batch_size, shuffle=True, sample=1.0):
+    def __init__(self, questions, batch_size, max_cands, shuffle=True, sample=1.0):
         self.batch_size = batch_size
         if sample==1.0: self.questions = questions
         else: self.questions = random.sample(questions, 
@@ -14,7 +14,7 @@ class MiniBatchLoader():
         self.bins = self.build_bins(self.questions)
         self.max_doc_len = max(self.bins.keys())
         self.max_qry_len = max(map(lambda x:len(x[1]), self.questions))
-        self.max_num_cand = max(map(lambda x:len(x[3]), self.questions))
+        self.max_num_cand = max_cands
         self.max_word_len = MAX_WORD_LEN
         self.shuffle = shuffle
 	self.reset()

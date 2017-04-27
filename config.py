@@ -1,5 +1,5 @@
 # Minibatch Size
-BATCH_SIZE = 32
+BATCH_SIZE = 128
 # Gradient clip threshold
 GRAD_CLIP = 10
 # Learning rate
@@ -9,7 +9,7 @@ GRAD_STEPS = -1
 # Number of epochs for training
 NUM_EPOCHS = 10
 # do validation every VALIDATION_FREQ iterations
-VALIDATION_FREQ = 100
+VALIDATION_FREQ = 500
 # maximum word length for character model
 MAX_WORD_LEN = 10
 # annealing every x epochs
@@ -35,7 +35,7 @@ def get_params(dataset):
         return babi_params
     elif dataset=='babi-3-1k-mix' or dataset=='babi-3-10k-mix':
         return babimix_params
-    elif dataset=='debug' or dataset=='wdw_debug':
+    elif dataset=='lambada_debug' or dataset=='wdw_debug':
         return debug_params
     else:
         raise ValueError("Dataset %s not found"%dataset)
@@ -58,9 +58,9 @@ wdw_params = {
         'use_feat'  :   1,
         #'num_coref' :   76,
         #'coref_dim' :   0,
-        'max_chains' :   77,
-        'num_relations' :   4,
-        'relation_dims' :   [64,64,64,64],
+        'max_chains' :   5,
+        'num_relations' :   2,
+        'relation_dims' :   64,
         }
 
 cnn_params = {
@@ -93,14 +93,17 @@ cbtne_params = {
         }
 
 lambada_params = {
-     'nhidden'   :   256,
+        'nhidden'   :   256,
         'char_dim'  :   0,
-     'dropout'   :   0.2,
+        'dropout'   :   0.2,
         'word2vec'  :   'word2vec/word2vec_glove.txt',
         'train_emb' :   1,
-     'use_feat'  :   0,
-        'num_coref' :   14,
-     'coref_dim' :   0,
+        'use_feat'  :   0,
+        #'num_coref' :   14,
+        #'coref_dim' :   0,
+        'max_chains'    :   15,
+        'num_relations' :   2,
+        'relation_dims' :   128,
         }
 
 babi_params = {
@@ -110,7 +113,10 @@ babi_params = {
         'word2vec'  :   None,
         'train_emb' :   1,
         'use_feat'  :   0,
-        'coref_dim' :   0,
+        #'coref_dim' :   0,
+        'max_chains'    :   14,
+        'num_relations' :   2,
+        'relation_dims' :   32,
         }
 
 babimix_params = {
@@ -131,7 +137,7 @@ debug_params = {
         'word2vec'  :   None,
         'train_emb' :   1,
         'use_feat'  :   0,
-        'max_chains' :   77,
+        'max_chains' :   15,
         'num_relations' :   4,
-        'relation_dims' :   [2,2,2,2],
+        'relation_dims' :   2,
         }
