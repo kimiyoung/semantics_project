@@ -1,10 +1,8 @@
 import tensorflow as tf
 import numpy as np
-#from tensorflow.python.client import timeline
 from tools import sub_sample
 from config import *
 from tflayers import *
-#import sys
 
 EPS = 1e-7
 
@@ -72,6 +70,7 @@ class Model:
             doc_emb = tf.nn.embedding_lookup(self.Wemb, self.doc) # B x N x De
             qry_emb = tf.nn.embedding_lookup(self.Wemb, self.qry) # B x Q x De
             fea_emb = tf.nn.embedding_lookup(self.Femb, self.feat) # B x N x 2
+            self.aggs = []
             # layers
             for i in range(K):
                 # append feat
@@ -85,9 +84,9 @@ class Model:
                         self.max_chains, concat=self.concat)
                 fqry = MageRNN(self.num_relations, inqry, self.relation_dims, 
                         self.max_chains, concat=self.concat)
-                fdout, dmem = fdoc.compute(doc_emb, self.dmask, self.docei, self.doceo, 
+                fdout, dmem, fdagg = fdoc.compute(doc_emb, self.dmask, self.docei, self.doceo, 
                         self.docri, self.docro) # B x N x Dh
-                fqout, qmem = fqry.compute(qry_emb, self.qmask, self.qryei, self.qryeo, 
+                fqout, qmem, fqagg = fqry.compute(qry_emb, self.qmask, self.qryei, self.qryeo, 
                         self.qryri, self.qryro, mem_init=dmem[:,-1,:,:]) # B x Q x Dh
                 # backward
                 # flip masks o<->i, mirror relation types
@@ -95,16 +94,9 @@ class Model:
                         self.max_chains, reverse=True, concat=self.concat)
                 bqry = MageRNN(self.num_relations, inqry, self.relation_dims, 
                         self.max_chains, reverse=True, concat=self.concat)
-                #bqout, qmem = bqry.compute(qry_emb, self.qmask, self.qryeo, self.qryei, 
-                #        self.num_relations-1-self.qryri, 
-                #        self.num_relations-1-self.qryro) # B x Q x Dh
-                #bdout, dmem = bdoc.compute(doc_emb, self.dmask, self.doceo, self.docei, 
-                #        self.num_relations-1-self.docri, 
-                #        self.num_relations-1-self.docro, 
-                #        mem_init=qmem[:,-1,:,:]) # B x N x Dh
-                bqout, qmem = bqry.compute(qry_emb, self.qmask, self.qryeo, self.qryei, 
+                bqout, qmem, bqagg = bqry.compute(qry_emb, self.qmask, self.qryeo, self.qryei, 
                         self.qryro, self.qryri)
-                bdout, dmem = bdoc.compute(doc_emb, self.dmask, self.doceo, self.docei, 
+                bdout, dmem, bdagg = bdoc.compute(doc_emb, self.dmask, self.doceo, self.docei, 
                         self.docro, self.docri, mem_init=qmem[:,-1,:,:]) # B x N x Dh
                 doc_emb = tf.concat([fdout, bdout], axis=2) # B x N x 2Dh
                 qry_emb = tf.concat([fqout, bqout], axis=2) # B x Q x 2Dh
@@ -119,6 +111,7 @@ class Model:
                     gating = tf.matmul(alphas, qry_emb) # B x N x 2Dh
                     doc_emb = doc_emb*gating # B x N x 2Dh
                     doc_emb = tf.nn.dropout(doc_emb, self.keep_prob) 
+                self.aggs.append(fdagg)
             # attention sum
             if cloze:
                 cl = tf.one_hot(self.cloze, tf.shape(self.qry)[1]) # B x Q
@@ -176,7 +169,8 @@ class Model:
         qei, qeo, qri, qro = self.get_graph(crq)
         #run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
         #run_metadata = tf.RunMetadata()
-        loss, acc, probs, _ = self.session.run([self.loss, self.acc, self.probc, self.train_op], 
+        loss, acc, probs, _ = self.session.run(
+                [self.loss, self.acc, self.probc, self.train_op], 
                 feed_dict = {
                     self.doc : dw[:,:,0],
                     self.docei : dei,
@@ -214,8 +208,10 @@ class Model:
         f = prepare_input(dw,qw)
         dei, deo, dri, dro = self.get_graph(crd)
         qei, qeo, qri, qro = self.get_graph(crq)
-        loss, acc, probs, drep, qrep, dprobs = self.session.run(
-                [self.loss, self.acc, self.probc, self.doc_rep, self.qry_rep, self.doc_probs], 
+        #loss, acc, probs, drep, qrep, dprobs, aggs = self.session.run(
+        outs = self.session.run(
+                [self.loss, self.acc, self.probc, self.doc_rep, self.qry_rep, self.doc_probs]+
+                self.aggs, 
                 feed_dict = {
                     self.doc : dw[:,:,0],
                     self.docei : dei,
@@ -236,7 +232,8 @@ class Model:
                     self.cloze : cl,
                     self.keep_prob : 1.,
                     })
-        return loss, acc, probs, drep, qrep, dprobs
+        #return loss, acc, probs, drep, qrep, dprobs, aggs
+        return outs
     
     def save_model(self, save_path):
         base_path = save_path.rsplit('/',1)[0]+'/'

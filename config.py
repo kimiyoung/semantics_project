@@ -1,5 +1,5 @@
 # Minibatch Size
-BATCH_SIZE = 128
+BATCH_SIZE = 64
 # Gradient clip threshold
 GRAD_CLIP = 10
 # Learning rate

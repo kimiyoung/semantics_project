@@ -162,10 +162,10 @@ class Model:
         return loss, acc, probs, drep, qrep, dprobs
     
     def save_model(self, save_path):
-        base_path = save_path.rsplit('/',1)[0]
+        base_path = save_path.rsplit('/',1)[0]+'/'
         self.saver.save(self.session, base_path+'model')
 
     def load_model(self, load_path):
-        base_path = load_path.rsplit('/',1)[0]
+        base_path = load_path.rsplit('/',1)[0]+'/'
         new_saver = tf.train.import_meta_graph(base_path+'model.meta')
         new_saver.restore(self.session, tf.train.latest_checkpoint(base_path))
