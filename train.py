@@ -51,14 +51,17 @@ def main(save_path, params):
 
     logger = open(save_path+'/log','a',0)
 
-    if os.path.isfile('%s/best_model.p'%save_path):
+    #if os.path.isfile('%s/best_model.p'%save_path):
+    #    print('loading previously saved model')
+    #    m.load_model('%s/best_model.p'%save_path)
+    #else:
+    #    print('saving init model')
+    #    m.save_model('%s/model_init.p'%save_path)
+    #    print('loading init model')
+    #    m.load_model('%s/model_init.p'%save_path)
+    if params['reload_']:
         print('loading previously saved model')
         m.load_model('%s/best_model.p'%save_path)
-    else:
-        print('saving init model')
-        m.save_model('%s/model_init.p'%save_path)
-        print('loading init model')
-        m.load_model('%s/model_init.p'%save_path)
 
     # train
     for epoch in xrange(NUM_EPOCHS):
