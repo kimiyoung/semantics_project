@@ -23,7 +23,10 @@ class Data:
         self.num_entities = num_entities
         self.inv_dictionary = {v:k for k,v in dictionary[0].items()}
         self.word_counts = word_counts
-        self.max_num_cand = max(map(lambda x:len(x[3]), training+validation+test))
+        if training is not None:
+            self.max_num_cand = max(map(lambda x:len(x[3]), training+validation+test))
+        else:
+            self.max_num_cand = max(map(lambda x:len(x[3]), validation+test))
 
 class DataPreprocessor:
 

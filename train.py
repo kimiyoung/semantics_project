@@ -9,7 +9,7 @@ from config import *
 from model import BiGRU, GA, GAMage
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
-def main(save_path, params):
+def main(save_path, params, mode="train"):
 
     word2vec = params['word2vec']
     dataset = params['dataset']
@@ -34,8 +34,12 @@ def main(save_path, params):
             data.max_num_cand, sample=train_cut)
     batch_loader_val = MiniBatchLoader.MiniBatchLoader(data.validation, BATCH_SIZE, 
             data.max_num_cand)
-    batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.test, BATCH_SIZE, 
-            data.max_num_cand)
+    if mode=="validation":
+        batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.validation, BATCH_SIZE, 
+                data.max_num_cand)
+    else:
+        batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.test, BATCH_SIZE, 
+                data.max_num_cand)
     num_candidates = data.max_num_cand
 
     print("building network ...")
@@ -63,60 +67,60 @@ def main(save_path, params):
         print('loading previously saved model')
         m.load_model('%s/best_model.p'%save_path)
 
-    # train
-    for epoch in xrange(NUM_EPOCHS):
-        estart = time.time()
-        new_max = False
+    if mode=="train":
+        # train
+        for epoch in xrange(NUM_EPOCHS):
+            estart = time.time()
+            new_max = False
 
-        for (dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, 
-                cl, crd, crq, fnames) in batch_loader_train:
-            loss, tr_acc, probs = m.train(dw, dt, qw, qt, c, a, m_dw, 
-                    m_qw, tt, tm, m_c, cl, crd, crq)
+            for (dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, 
+                    cl, crd, crq, fnames) in batch_loader_train:
+                loss, tr_acc, probs = m.train(dw, dt, qw, qt, c, a, m_dw, 
+                        m_qw, tt, tm, m_c, cl, crd, crq)
 
-            message = "Epoch %d TRAIN loss=%.4e acc=%.4f elapsed=%.1f" % (
-                    epoch, loss, tr_acc, time.time()-estart)
-            print message
-            logger.write(message+'\n')
-
-            num_iter += 1
-            if num_iter % VALIDATION_FREQ == 0:
-                total_loss, total_acc, n, n_cand = 0., 0., 0., 0.
-
-                for (dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, 
-                        cl, crd, crq, fnames) in batch_loader_val:
-                    outs = m.validate(dw, dt, qw, qt, c, a, 
-                            m_dw, m_qw, tt, tm, m_c, cl, crd, crq)
-                    loss, acc, probs = outs[:3]
-
-                    bsize = dw.shape[0]
-                    total_loss += bsize*loss
-                    total_acc += bsize*acc
-                    n += bsize
-
-		val_acc = total_acc/n
-                if val_acc > max_acc:
-                    max_acc = val_acc
-                    m.save_model('%s/best_model.p'%save_path)
-                    new_max = True
-                message = "Epoch %d VAL loss=%.4e acc=%.4f max_acc=%.4f" % (
-                    epoch, total_loss/n, val_acc, max_acc)
+                message = "Epoch %d TRAIN loss=%.4e acc=%.4f elapsed=%.1f" % (
+                        epoch, loss, tr_acc, time.time()-estart)
                 print message
                 logger.write(message+'\n')
 
-        m.save_model('%s/model_%d.p'%(save_path,epoch))
-        message = "After Epoch %d: Train acc=%.4f, Val acc=%.4f" % (epoch, tr_acc, max_acc)
-        print message
-        logger.write(message+'\n')
-        
-        # learning schedule
-        if epoch >=2 and epoch%ANNEAL==0:
-            m.anneal()
-        # stopping criterion
-        if (STOPPING and not new_max) or val_acc>0.99:
-            break
+                num_iter += 1
+                if num_iter % VALIDATION_FREQ == 0:
+                    total_loss, total_acc, n, n_cand = 0., 0., 0., 0.
+
+                    for (dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, 
+                            cl, crd, crq, fnames) in batch_loader_val:
+                        outs = m.validate(dw, dt, qw, qt, c, a, 
+                                m_dw, m_qw, tt, tm, m_c, cl, crd, crq)
+                        loss, acc, probs = outs[:3]
+
+                        bsize = dw.shape[0]
+                        total_loss += bsize*loss
+                        total_acc += bsize*acc
+                        n += bsize
+
+                    val_acc = total_acc/n
+                    if val_acc > max_acc:
+                        max_acc = val_acc
+                        m.save_model('%s/best_model.p'%save_path)
+                        new_max = True
+                    message = "Epoch %d VAL loss=%.4e acc=%.4f max_acc=%.4f" % (
+                        epoch, total_loss/n, val_acc, max_acc)
+                    print message
+                    logger.write(message+'\n')
+
+            m.save_model('%s/model_%d.p'%(save_path,epoch))
+            message = "After Epoch %d: Train acc=%.4f, Val acc=%.4f" % (epoch, tr_acc, max_acc)
+            print message
+            logger.write(message+'\n')
+            
+            # learning schedule
+            if epoch >=2 and epoch%ANNEAL==0:
+                m.anneal()
+            # stopping criterion
+            if (STOPPING and not new_max) or val_acc>0.99:
+                break
 
     # test
-    mode = 'test'
     m.load_model('%s/best_model.p'%save_path)
 
     print("testing ...")
@@ -127,11 +131,13 @@ def main(save_path, params):
     fids, attns = [], []
     dreps, qreps = [], []
     all_aggs = []
+    all_masks = []
     total_loss, total_acc, n = 0., 0., 0
     for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, crd, crq, fnames in batch_loader_test:
         outs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, crd, crq)
         loss, acc, probs, drep, qrep, doc_probs = outs[:6]
-        aggs = outs[6:6+params['nlayers']]
+        aggs = outs[6:6+2*params['nlayers']]
+        all_masks.append([crd,crq])
         dreps.append(drep)
         qreps.append(qrep)
         all_aggs.append(aggs)
@@ -154,7 +160,7 @@ def main(save_path, params):
         np.save('%s/out_emb.npy' % save_path, m.get_output_weights())
     pkl.dump(attns, open('%s/%s.attns' % (save_path,mode),'w'))
     #pkl.dump([dreps, qreps], open('%s/%s.reps' % (save_path,mode),'w'))
-    pkl.dump(all_aggs, open('%s/%s.aggs' % (save_path,mode),'w'))
+    pkl.dump([all_aggs,all_masks], open('%s/%s.aggs' % (save_path,mode),'w'))
     f = open('%s/%s.ids' % (save_path,mode),'w')
     for item in fids: f.write(str(item)+'\n')
     f.close()

@@ -31,6 +31,8 @@ class Model:
         self.concat = params['concat']
         seed = params['seed']
         K = params['nlayers']
+        self.ga_layers = [int(kk) for kk in params['ga_layers'].split(',')]
+        self.mage_layers = [int(kk) for kk in params['mage_layers'].split(',')]
 
         self.graph = tf.Graph()
         with self.graph.as_default():
@@ -73,35 +75,8 @@ class Model:
             self.aggs = []
             # layers
             for i in range(K):
-                # append feat
-                indoc = self.embed_dim if i==0 else 2*self.nhidden
-                if self.use_feat and i==K-1:
-                    doc_emb = tf.concat([doc_emb, fea_emb], axis=2) # B x N x (De+2)
-                    indoc += 2
-                inqry = self.embed_dim if i==0 else 2*self.nhidden
-                # forward
-                fdoc = MageRNN(self.num_relations, indoc, self.relation_dims, 
-                        self.max_chains, concat=self.concat)
-                fqry = MageRNN(self.num_relations, inqry, self.relation_dims, 
-                        self.max_chains, concat=self.concat)
-                fdout, dmem, fdagg = fdoc.compute(doc_emb, self.dmask, self.docei, self.doceo, 
-                        self.docri, self.docro) # B x N x Dh
-                fqout, qmem, fqagg = fqry.compute(qry_emb, self.qmask, self.qryei, self.qryeo, 
-                        self.qryri, self.qryro, mem_init=dmem[:,-1,:,:]) # B x Q x Dh
-                # backward
-                # flip masks o<->i, mirror relation types
-                bdoc = MageRNN(self.num_relations, indoc, self.relation_dims, 
-                        self.max_chains, reverse=True, concat=self.concat)
-                bqry = MageRNN(self.num_relations, inqry, self.relation_dims, 
-                        self.max_chains, reverse=True, concat=self.concat)
-                bqout, qmem, bqagg = bqry.compute(qry_emb, self.qmask, self.qryeo, self.qryei, 
-                        self.qryro, self.qryri)
-                bdout, dmem, bdagg = bdoc.compute(doc_emb, self.dmask, self.doceo, self.docei, 
-                        self.docro, self.docri, mem_init=qmem[:,-1,:,:]) # B x N x Dh
-                doc_emb = tf.concat([fdout, bdout], axis=2) # B x N x 2Dh
-                qry_emb = tf.concat([fqout, bqout], axis=2) # B x Q x 2Dh
                 # gated attention
-                if i<K-1:
+                if i in self.ga_layers:
                     qshuf = tf.transpose(qry_emb, perm=(0,2,1)) # B x 2Dh x Q
                     M = tf.matmul(doc_emb, qshuf) # B x N x Q
                     alphas = tf.nn.softmax(M)*tf.expand_dims(self.qmask, 
@@ -110,8 +85,55 @@ class Model:
                             axis=2, keep_dims=True) # B x N x Q
                     gating = tf.matmul(alphas, qry_emb) # B x N x 2Dh
                     doc_emb = doc_emb*gating # B x N x 2Dh
+                    # dropout
                     doc_emb = tf.nn.dropout(doc_emb, self.keep_prob) 
+                # append feat
+                indoc = self.embed_dim if i==0 else 2*self.nhidden
+                if self.use_feat and i==K-1:
+                    doc_emb = tf.concat([doc_emb, fea_emb], axis=2) # B x N x (De+2)
+                    indoc += 2
+                inqry = self.embed_dim if i==0 else 2*self.nhidden
+                # forward
+                if i in self.mage_layers:
+                    # forward
+                    fdoc = MageRNN(self.num_relations, indoc, self.relation_dims, 
+                            self.max_chains, concat=self.concat)
+                    fqry = MageRNN(self.num_relations, inqry, self.relation_dims, 
+                            self.max_chains, concat=self.concat)
+                    fdout, dmem, fdagg = fdoc.compute(doc_emb, self.dmask, self.docei, self.doceo, 
+                            self.docri, self.docro) # B x N x Dh
+                    fqout, qmem, fqagg = fqry.compute(qry_emb, self.qmask, self.qryei, self.qryeo, 
+                            self.qryri, self.qryro, mem_init=dmem[:,-1,:,:]) # B x Q x Dh
+                    # backward
+                    # flip masks o<->i, mirror relation types
+                    bdoc = MageRNN(self.num_relations, indoc, self.relation_dims, 
+                            self.max_chains, reverse=True, concat=self.concat)
+                    bqry = MageRNN(self.num_relations, inqry, self.relation_dims, 
+                            self.max_chains, reverse=True, concat=self.concat)
+                    bqout, qmem, bqagg = bqry.compute(qry_emb, self.qmask, self.qryeo, self.qryei, 
+                            self.qryro, self.qryri)
+                    bdout, dmem, bdagg = bdoc.compute(doc_emb, self.dmask, self.doceo, self.docei, 
+                            self.docro, self.docri, mem_init=qmem[:,-1,:,:]) # B x N x Dh
+                    doc_emb = tf.concat([fdout, bdout], axis=2) # B x N x 2Dh
+                    qry_emb = tf.concat([fqout, bqout], axis=2) # B x Q x 2Dh
+                else:
+                    # doc
+                    fgru = GRU(indoc, self.nhidden, "docfgru%d"%i)
+                    bgru = GRU(indoc, self.nhidden, "docbgru%d"%i, reverse=True)
+                    fout = fgru.compute(None, doc_emb, self.dmask) # B x N x Dh
+                    bout = bgru.compute(None, doc_emb, self.dmask) # B x N x Dh
+                    doc_emb = tf.concat([fout, bout], axis=2) # B x N x 2Dh
+                    # qry
+                    fgru = GRU(inqry, self.nhidden, "qryfgru%d"%i)
+                    bgru = GRU(inqry, self.nhidden, "qrybgru%d"%i, reverse=True)
+                    fout = fgru.compute(None, qry_emb, self.qmask) # B x Q x Dh
+                    bout = bgru.compute(None, qry_emb, self.qmask) # B x Q x Dh
+                    qry_emb = tf.concat([fout, bout], axis=2) # B x Q x 2Dh
+                    fdagg = tf.zeros((1,1))
+                    fqagg = tf.zeros((1,1))
                 self.aggs.append(fdagg)
+                self.aggs.append(fqagg)
+
             # attention sum
             if cloze:
                 cl = tf.one_hot(self.cloze, tf.shape(self.qry)[1]) # B x Q

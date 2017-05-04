@@ -30,6 +30,10 @@ parser.add_argument('--train_cut', dest='train_cut', type=float, default=1.0,
         help='Cut training data size by factor (default - no cut)')
 parser.add_argument('--gating_fn', dest='gating_fn', type=str, default='T.mul',
         help='Gating function (T.mul || Tsum || Tconcat)')
+parser.add_argument('--ga_layers', dest='ga_layers', type=str, default=None,
+        help='Layers to apply GA before (comma-separated list, default is every layer except first')
+parser.add_argument('--mage_layers', dest='mage_layers', type=str, default=None,
+        help='Layers to use MAGE RNN instead of GRU (comma-separated list, default is all)')
 parser.add_argument('--concat', dest='concat', action='store_true')
 parser.add_argument('--no-concat', dest='concat', action='store_false')
 parser.add_argument('--reload', dest='reload_', action='store_true')
@@ -40,6 +44,10 @@ args = parser.parse_args()
 cmd = vars(args)
 params = get_params(cmd['dataset'])
 params.update(cmd)
+if params['ga_layers'] is None:
+    params['ga_layers'] = ','.join([str(k) for k in range(1,params['nlayers'])])
+if params['mage_layers'] is None:
+    params['mage_layers'] = ','.join([str(k) for k in range(params['nlayers'])])
 
 np.random.seed(params['seed'])
 random.seed(params['seed'])
@@ -66,7 +74,9 @@ save_path = ('crfreader_experiments_babi-v2/'+params['model']+'/'+params['datase
         #'_rdims%s'%'.'.join([str(rd) for rd in params['relation_dims']])+'/')
         '_concat%d'%int(params['concat'])+
         '_chains%d'%params['max_chains']+
-        '_rdims%d'%params['relation_dims'])
+        '_rdims%d'%params['relation_dims']+
+        '_ga%s'%params['ga_layers']+
+        '_mage%s'%params['mage_layers'])
 if not os.path.exists(save_path): os.makedirs(save_path)
 #else: sys.exit()
 
@@ -75,6 +85,6 @@ if params['mode']==0:
     train.main(save_path, params)
 # test
 elif params['mode']==1:
-    test.main(save_path, params)
+    train.main(save_path, params, mode="test")
 elif params['mode']==2:
-    test.main(save_path, params, mode='validation')
+    train.main(save_path, params, mode='validation')

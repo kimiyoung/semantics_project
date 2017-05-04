@@ -1,21 +1,21 @@
 # Minibatch Size
-BATCH_SIZE = 64
+BATCH_SIZE = 32
 # Gradient clip threshold
 GRAD_CLIP = 10
 # Learning rate
-LEARNING_RATE = 0.0005
+LEARNING_RATE = 0.01
 # Maximum number of steps in BPTT
 GRAD_STEPS = -1
 # Number of epochs for training
 NUM_EPOCHS = 10
 # do validation every VALIDATION_FREQ iterations
-VALIDATION_FREQ = 500
+VALIDATION_FREQ = 25
 # maximum word length for character model
 MAX_WORD_LEN = 10
 # annealing every x epochs
 ANNEAL = 1
 # early stopping
-STOPPING = True
+STOPPING = False
 
 # dataset params
 def get_params(dataset):

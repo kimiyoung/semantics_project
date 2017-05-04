@@ -179,7 +179,7 @@ class MageRNN(object):
                 dtype=tf.float32)
         if mem_init is None: mem_init = tf.zeros(
                 (tf.shape(X)[0], self.max_chains, self.rdims), dtype=tf.float32)
-        agg_init = tf.zeros((tf.shape(X)[0], self.num_relations, self.max_chains),
+        agg_init = tf.zeros((tf.shape(X)[0], self.num_relations),
                 dtype = tf.float32)
         outs, mems, aggs = tf.scan(self._step, (Xre, Xpre, Mre, Eire, Eore, Rire, Rore), 
                 initializer=(init,mem_init,agg_init)) # N x B x Dout
@@ -190,7 +190,7 @@ class MageRNN(object):
             aggs = tf.reverse(aggs, axis=[0])
 
         return (tf.transpose(outs, perm=(1,0,2)), tf.transpose(mems, perm=(1,0,2,3)), 
-                tf.transpose(aggs, perm=(1,0,2,3)))
+                tf.transpose(aggs, perm=(1,0,2)))
 
     def _attention(self, x, c_r, e, r):
         EPS = 1e-100
@@ -208,7 +208,8 @@ class MageRNN(object):
             agg = tf.transpose(r*tf.expand_dims(e, axis=2), 
                     perm=[0,2,1]) # B x R x C
         mem = tf.matmul(agg, c_r) # B x R x Dr
-        return tf.reshape(mem, [-1, self.num_relations*self.rdims]), agg # B x RDr
+        return tf.reshape(mem, [-1, self.num_relations*self.rdims]), \
+                tf.reduce_sum(agg, axis=2) # B x RDr, B x R
 
     def _step(self, prev, inps):
         hprev, mprev = prev[0], prev[1] # hprev : B x Dout, mprev : B x C x Dr
