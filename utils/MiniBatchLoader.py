@@ -125,7 +125,7 @@ class MiniBatchLoader():
             for ic, chain in enumerate(coref):
                 cord = filter(lambda x:x<len(doc_w), chain)
                 corq = filter(lambda x:x>=len(doc_w), chain)
-                corq = map(lambda x:x-len(doc_w), corq)
+                corq = map(lambda x:x+1-len(doc_w), corq) # +1 to account for SYMB_BEGIN
                 crd[n,list(cord)] = ic+1
                 crq[n,list(corq)] = ic+1
 
