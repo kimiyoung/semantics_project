@@ -101,9 +101,9 @@ lambada_params = {
         'use_feat'  :   0,
         #'num_coref' :   14,
         #'coref_dim' :   0,
-        'max_chains'    :   15,
-        'num_relations' :   2,
-        'relation_dims' :   128,
+        'max_chains'    :   16,
+        'num_relations' :   10,
+        'relation_dims' :   25,
         }
 
 babi_params = {
@@ -137,7 +137,7 @@ debug_params = {
         'word2vec'  :   None,
         'train_emb' :   1,
         'use_feat'  :   0,
-        'max_chains' :   15,
-        'num_relations' :   4,
+        'max_chains' :   25,
+        'num_relations' :   64,
         'relation_dims' :   2,
         }

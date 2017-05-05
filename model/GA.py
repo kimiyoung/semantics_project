@@ -4,7 +4,7 @@ from tools import sub_sample
 from config import *
 from tflayers import *
 
-EPS = 1e-7
+EPS = 1e-20
 
 def prepare_input(d,q):
     f = np.zeros(d.shape[:2]).astype('int32')

@@ -6,7 +6,8 @@ from config import MAX_WORD_LEN
 
 class MiniBatchLoader():
 
-    def __init__(self, questions, batch_size, max_cands, shuffle=True, sample=1.0):
+    def __init__(self, questions, batch_size, max_cands, max_chains, 
+            shuffle=True, sample=1.0):
         self.batch_size = batch_size
         if sample==1.0: self.questions = questions
         else: self.questions = random.sample(questions, 
@@ -14,6 +15,8 @@ class MiniBatchLoader():
         self.bins = self.build_bins(self.questions)
         self.max_doc_len = max(self.bins.keys())
         self.max_qry_len = max(map(lambda x:len(x[1]), self.questions))
+        #self.max_num_chains = max(map(lambda x:len(x[7]), self.questions))
+        self.max_num_chains = max_chains
         self.max_num_cand = max_cands
         self.max_word_len = MAX_WORD_LEN
         self.shuffle = shuffle
@@ -77,13 +80,34 @@ class MiniBatchLoader():
         qw = np.zeros((curr_batch_size, self.max_qry_len, 1), dtype='int32') # query words
         c = np.zeros((curr_batch_size, curr_max_doc_len, self.max_num_cand), 
                 dtype='int32')   # candidate answers
-        crd = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32') # coref id
-        crq = np.zeros((curr_batch_size, self.max_qry_len), dtype='int32') # coref id
+        #crd = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32') # coref id
+        #crq = np.zeros((curr_batch_size, self.max_qry_len), dtype='int32') # coref id
         cl = np.zeros((curr_batch_size,), dtype='int32') # position of cloze in query
 
         m_dw = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32')  # document word mask
         m_qw = np.zeros((curr_batch_size, self.max_qry_len), dtype='int32')  # query word mask
         m_c = np.zeros((curr_batch_size, curr_max_doc_len), dtype='int32') # candidate mask
+
+        eiq = np.zeros((curr_batch_size, self.max_qry_len, self.max_num_chains), 
+                dtype='float32')
+        eiq[:,:,0] = 1.
+        eid = np.zeros((curr_batch_size, curr_max_doc_len, self.max_num_chains), 
+                dtype='float32')
+        eid[:,:,0] = 1.
+        riq = np.zeros((curr_batch_size, self.max_qry_len, self.max_num_chains), 
+                dtype='float32')
+        rid = np.zeros((curr_batch_size, curr_max_doc_len, self.max_num_chains), 
+                dtype='float32')
+        eoq = np.zeros((curr_batch_size, self.max_qry_len, self.max_num_chains), 
+                dtype='float32')
+        eoq[:,:,0] = 1.
+        eod = np.zeros((curr_batch_size, curr_max_doc_len, self.max_num_chains), 
+                dtype='float32')
+        eod[:,:,0] = 1.
+        roq = np.zeros((curr_batch_size, self.max_qry_len, self.max_num_chains), 
+                dtype='float32')
+        rod = np.zeros((curr_batch_size, curr_max_doc_len, self.max_num_chains), 
+                dtype='float32')
 
         a = np.zeros((curr_batch_size, ), dtype='int32')    # correct answer
         fnames = ['']*curr_batch_size
@@ -122,12 +146,26 @@ class MiniBatchLoader():
             #assert ans_idx, "answer index in doc empty! %s" % fname
 
             # build coref index 
-            for ic, chain in enumerate(coref):
-                cord = filter(lambda x:x<len(doc_w), chain)
-                corq = filter(lambda x:x>=len(doc_w), chain)
-                corq = map(lambda x:x-len(doc_w), corq)
-                crd[n,list(cord)] = ic+1
-                crq[n,list(corq)] = ic+1
+            for it, chain in enumerate(coref):
+                #cord = filter(lambda x:x<len(doc_w), chain)
+                #corq = filter(lambda x:x>=len(doc_w), chain)
+                #corq = map(lambda x:x-len(doc_w), corq)
+                #crd[n,list(cord)] = ic+1
+                #crq[n,list(corq)] = ic+1
+                ic = it+1
+                for item in chain:
+                    if item[2]<len(doc_w):
+                        eid[n,item[2],ic] = 1.
+                        rid[n,item[2],ic] = item[1]+1
+                    else:
+                        eiq[n,item[2]+1-len(doc_w),ic] = 1. # +1 to account for @SYMB_BEGIN
+                        riq[n,item[2]+1-len(doc_w),ic] = item[1]+1
+                    if item[0]<len(doc_w):
+                        eod[n,item[0],ic] = 1.
+                        rod[n,item[0],ic] = item[1]+1
+                    else:
+                        eoq[n,item[0]+1-len(doc_w),ic] = 1.
+                        roq[n,item[0]+1-len(doc_w),ic] = item[1]+1
 
             cl[n] = cloze
             fnames[n] = fname
@@ -148,7 +186,7 @@ class MiniBatchLoader():
 
         self.ptr += 1
 
-        return dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, crd, crq, fnames
+        return dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, (eid, eod, rid, rod), (eiq, eoq, riq, roq), fnames
 
 def unit_test(mini_batch_loader):
     """unit test to validate MiniBatchLoader using max-frequency (exclusive).

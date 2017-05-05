@@ -2,6 +2,7 @@ import numpy as np
 import glob
 import os
 import sys
+import cPickle as pkl
 
 from itertools import izip
 from config import MAX_WORD_LEN
@@ -42,7 +43,7 @@ class DataPreprocessor:
         data = Data(dictionary, num_entities, [], [], test, word_counts)
         return data
 
-    def preprocess(self, question_dir, max_chains=MAX_COREF, 
+    def preprocess(self, question_dir, relationfile, max_chains=MAX_COREF, 
             no_training_set=False, use_chars=True):
         """
         preprocess all data into a standalone Data object.
@@ -60,13 +61,13 @@ class DataPreprocessor:
         else:
             print "preparing training data ..."
             training = self.parse_all_files(question_dir + "/training_coref", 
-                    dictionary, use_chars, max_chains)
+                    relationfile, dictionary, use_chars, max_chains)
         print "preparing validation data ..."
         validation = self.parse_all_files(question_dir + "/validation_coref", 
-                dictionary, use_chars, max_chains)
+                relationfile, dictionary, use_chars, max_chains)
         print "preparing test data ..."
-        test = self.parse_all_files(question_dir + "/test_coref", dictionary, use_chars, 
-                max_chains)
+        test = self.parse_all_files(question_dir + "/test_coref", 
+                relationfile, dictionary, use_chars, max_chains)
 
         data = Data(dictionary, num_entities, training, validation, test, word_counts)
         return data
@@ -275,7 +276,8 @@ class DataPreprocessor:
         w_dict, c_dict = dictionary[0], dictionary[1]
         questions = []
         with open(fdata) as data, open(fcoref) as coreffile:
-            for ii, (raw, corefs) in enumerate(izip(data, coreffile)):
+            all_chains = pkl.load(coreffile)
+            for ii, raw in enumerate(data):
                 sents = raw.rstrip().rsplit(' . ', 1) # doc and query
                 doc_raw = sents[0].split() # document
                 qry_tok = sents[1].rstrip().split()
@@ -285,15 +287,16 @@ class DataPreprocessor:
                 cand_raw = [[cd] for cd in cand_raw]
 
                 # candidates and corefs
-                def _parse_coref(line):
-                    all_tokens = filter(lambda x:x, [mi for m in line.split() 
-                            for mi in m.split('|')])
-                    return set([int(t.rsplit(':',1)[1])-1 for t in all_tokens])
-                all_coref = corefs.rstrip()
-                if all_coref: 
-                    coref = [_parse_coref(line) 
-                            for line in all_coref.split('\t')[:max_chains-1]]
-                else: coref = []
+                #def _parse_coref(line):
+                #    all_tokens = filter(lambda x:x, [mi for m in line.split() 
+                #            for mi in m.split('|')])
+                #    return set([int(t.rsplit(':',1)[1])-1 for t in all_tokens])
+                #all_coref = corefs.rstrip()
+                #if all_coref: 
+                #    coref = [_parse_coref(line) 
+                #            for line in all_coref.split('\t')[:max_chains-1]]
+                #else: coref = []
+                coref = all_chains[ii][:max_chains-1]
                 if not any(aa in doc_raw for aa in ans_raw.split()):
                     print "answer not in doc %s" % ii
                     continue
@@ -303,7 +306,7 @@ class DataPreprocessor:
 
         return questions
 
-    def parse_all_files(self, directory, dictionary, use_chars, max_chains):
+    def parse_all_files(self, directory, rfile, dictionary, use_chars, max_chains):
         """
         parse all files under the given directory into a list of questions,
         where each element is in the form of (document, query, answer, filename)
@@ -312,7 +315,8 @@ class DataPreprocessor:
             print "found data file!"
             basedir = directory.rsplit('/',1)[0]
             stops = open(basedir+'/shortlist-stopwords.txt').read().splitlines()
-            questions = self.parse_data_file(directory+'.data', directory+'.coref', 
+            questions = self.parse_data_file(directory+'.data', 
+                    directory+'.'+rfile,
                     dictionary, use_chars, stops, max_chains)
         else:
             all_files = glob.glob(directory + '/*.question')

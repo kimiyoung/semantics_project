@@ -4,7 +4,7 @@ from tools import sub_sample
 from config import *
 from tflayers import *
 
-EPS = 1e-7
+EPS = 1e-30
 
 def prepare_input(d,q):
     f = np.zeros(d.shape[:2]).astype('int32')
@@ -165,8 +165,10 @@ class Model:
 
     def train(self, dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, crd, crq):
         f = prepare_input(dw,qw)
-        dei, deo, dri, dro = self.get_graph(crd)
-        qei, qeo, qri, qro = self.get_graph(crq)
+        #dei, deo, dri, dro = self.get_graph(crd)
+        dei, deo, dri, dro = crd
+        #qei, qeo, qri, qro = self.get_graph(crq)
+        qei, qeo, qri, qro = crq
         #run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
         #run_metadata = tf.RunMetadata()
         loss, acc, probs, _ = self.session.run(
@@ -206,8 +208,10 @@ class Model:
 
     def validate(self, dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, crd, crq):
         f = prepare_input(dw,qw)
-        dei, deo, dri, dro = self.get_graph(crd)
-        qei, qeo, qri, qro = self.get_graph(crq)
+        #dei, deo, dri, dro = self.get_graph(crd)
+        dei, deo, dri, dro = crd
+        #qei, qeo, qri, qro = self.get_graph(crq)
+        qei, qeo, qri, qro = crq
         #loss, acc, probs, drep, qrep, dprobs, aggs = self.session.run(
         outs = self.session.run(
                 [self.loss, self.acc, self.probc, self.doc_rep, self.qry_rep, self.doc_probs]+

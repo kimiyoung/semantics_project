@@ -21,7 +21,7 @@ def main(save_path, params):
 
     use_chars = params['char_dim']>0
     dp = DataPreprocessor.DataPreprocessor()
-    data = dp.preprocess(dataset, max_chains=params['max_chains'], 
+    data = dp.preprocess(dataset, params['rfile'], max_chains=params['max_chains'], 
             no_training_set=False, use_chars=use_chars)
     if data.validation[0][6]==-1:
         # no clozes
@@ -31,11 +31,11 @@ def main(save_path, params):
 
     print("building minibatch loaders ...")
     batch_loader_train = MiniBatchLoader.MiniBatchLoader(data.training, BATCH_SIZE, 
-            data.max_num_cand, sample=train_cut)
+            data.max_num_cand, params['max_chains'], sample=train_cut)
     batch_loader_val = MiniBatchLoader.MiniBatchLoader(data.validation, BATCH_SIZE, 
-            data.max_num_cand)
+            data.max_num_cand, params['max_chains'])
     batch_loader_test = MiniBatchLoader.MiniBatchLoader(data.test, BATCH_SIZE, 
-            data.max_num_cand)
+            data.max_num_cand, params['max_chains'])
     num_candidates = data.max_num_cand
 
     print("building network ...")
@@ -64,17 +64,20 @@ def main(save_path, params):
         m.load_model('%s/best_model.p'%save_path)
 
     # train
+    tafter = 0.
     for epoch in xrange(NUM_EPOCHS):
         estart = time.time()
         new_max = False
 
         for (dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, 
                 cl, crd, crq, fnames) in batch_loader_train:
+            tc = time.time()-tafter
             loss, tr_acc, probs = m.train(dw, dt, qw, qt, c, a, m_dw, 
                     m_qw, tt, tm, m_c, cl, crd, crq)
+            tafter = time.time()
 
-            message = "Epoch %d TRAIN loss=%.4e acc=%.4f elapsed=%.1f" % (
-                    epoch, loss, tr_acc, time.time()-estart)
+            message = "Epoch %d TRAIN loss=%.4e acc=%.4f elapsed=%.1f (%.1f outside)" % (
+                    epoch, loss, tr_acc, time.time()-estart, tc)
             print message
             logger.write(message+'\n')
 
@@ -93,7 +96,7 @@ def main(save_path, params):
                     total_acc += bsize*acc
                     n += bsize
 
-		val_acc = total_acc/n
+	        val_acc = total_acc/n
                 if val_acc > max_acc:
                     max_acc = val_acc
                     m.save_model('%s/best_model.p'%save_path)

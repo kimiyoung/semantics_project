@@ -24,6 +24,8 @@ parser.add_argument('--dataset', dest='dataset', type=str, default='wdw',
         help='Dataset - (cnn/questions || dailymail/questions || cbtcn || cbtne || wdw)')
 parser.add_argument('--subsample', dest='subsample', type=int, default=-1,
         help='Sample window size around candidates. (-1-no sampling)')
+parser.add_argument('--relation-file', dest='rfile', type=str, default='cso',
+        help='Relations file to use. (all / coref)')
 parser.add_argument('--seed', dest='seed', type=int, default=1,
         help='Seed for different experiments with same settings')
 parser.add_argument('--train_cut', dest='train_cut', type=float, default=1.0,
@@ -66,7 +68,8 @@ save_path = ('crfreader_experiments_babi-v2/'+params['model']+'/'+params['datase
         #'_rdims%s'%'.'.join([str(rd) for rd in params['relation_dims']])+'/')
         '_concat%d'%int(params['concat'])+
         '_chains%d'%params['max_chains']+
-        '_rdims%d'%params['relation_dims'])
+        '_rdims%d'%params['relation_dims']+
+        '_rfile%s'%params['rfile'])
 if not os.path.exists(save_path): os.makedirs(save_path)
 #else: sys.exit()
 

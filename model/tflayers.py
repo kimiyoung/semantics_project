@@ -206,7 +206,8 @@ class MageRNN(object):
                     tf.expand_dims(alphas, axis=2)*r, perm=[0,2,1]) # B x R x C
         else:
             agg = tf.transpose(r*tf.expand_dims(e, axis=2), 
-                    perm=[0,2,1]) # B x R x C
+                    perm=[0,2,1])/tf.expand_dims(
+                            tf.reduce_sum(e, axis=1, keep_dims=True), axis=1) # B x R x C
         mem = tf.matmul(agg, c_r) # B x R x Dr
         return tf.reshape(mem, [-1, self.num_relations*self.rdims]), agg # B x RDr
 
