@@ -279,7 +279,7 @@ class DataPreprocessor:
             all_chains = pkl.load(coreffile)
             for ii, raw in enumerate(data):
                 sents = raw.rstrip().rsplit(' . ', 1) # doc and query
-                doc_raw = sents[0].split() # document
+                doc_raw = sents[0].split()+['.'] # document
                 qry_tok = sents[1].rstrip().split()
                 qry_raw, ans_raw =  qry_tok[:-1], qry_tok[-1] # query and answer
                 cand_raw = filter(lambda x:x not in stops, set(doc_raw))

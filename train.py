@@ -137,7 +137,7 @@ def main(save_path, params, mode='train'):
     for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, crd, crq, fnames in batch_loader_test:
         outs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, crd, crq)
         loss, acc, probs, drep, qrep, doc_probs = outs[:6]
-        aggs = outs[6:6+params['nlayers']]
+        aggs = outs[6:6+4*params['nlayers']]
         dreps.append(drep)
         qreps.append(qrep)
         all_masks.append([crd[0],crq[0]])
