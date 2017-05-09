@@ -122,6 +122,7 @@ def main(save_path, params):
     fids, attns = [], []
     dreps, qreps = [], []
     all_aggs = []
+    all_masks = []
     total_loss, total_acc, n = 0., 0., 0
     for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, crd, crq, fnames in batch_loader_test:
         outs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, crd, crq)
@@ -129,6 +130,7 @@ def main(save_path, params):
         aggs = outs[6:6+params['nlayers']]
         dreps.append(drep)
         qreps.append(qrep)
+        all_masks.append([crd[0],crq[0]])
         all_aggs.append(aggs)
 
         bsize = dw.shape[0]
@@ -149,7 +151,7 @@ def main(save_path, params):
         np.save('%s/out_emb.npy' % save_path, m.get_output_weights())
     pkl.dump(attns, open('%s/%s.attns' % (save_path,mode),'w'))
     #pkl.dump([dreps, qreps], open('%s/%s.reps' % (save_path,mode),'w'))
-    pkl.dump(all_aggs, open('%s/%s.aggs' % (save_path,mode),'w'))
+    pkl.dump([all_aggs,all_masks], open('%s/%s.aggs' % (save_path,mode),'w'))
     f = open('%s/%s.ids' % (save_path,mode),'w')
     for item in fids: f.write(str(item)+'\n')
     f.close()

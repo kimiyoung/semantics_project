@@ -111,7 +111,7 @@ class Model:
                     gating = tf.matmul(alphas, qry_emb) # B x N x 2Dh
                     doc_emb = doc_emb*gating # B x N x 2Dh
                     doc_emb = tf.nn.dropout(doc_emb, self.keep_prob) 
-                self.aggs.append(fdagg)
+                self.aggs += [fdagg,fqagg,bdagg,bqagg]
             # attention sum
             if cloze:
                 cl = tf.one_hot(self.cloze, tf.shape(self.qry)[1]) # B x Q
