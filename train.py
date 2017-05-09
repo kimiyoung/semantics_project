@@ -9,7 +9,7 @@ from config import *
 from model import BiGRU, GA, GAMage
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
-def main(save_path, params):
+def main(save_path, params, mode='train'):
 
     word2vec = params['word2vec']
     dataset = params['dataset']
@@ -47,6 +47,7 @@ def main(save_path, params):
     num_iter = 0
     max_acc = 0.
     max_acc_c = 0.
+    min_loss = 1e5
     deltas = []
 
     logger = open(save_path+'/log','a',0)
@@ -56,59 +57,68 @@ def main(save_path, params):
         m.load_model('%s/best_model.p'%save_path)
 
     # train
-    tafter = 0.
-    for epoch in xrange(NUM_EPOCHS):
-        estart = time.time()
-        new_max = False
+    if mode=='train':
+        tafter = 0.
+        for epoch in xrange(NUM_EPOCHS):
+            estart = time.time()
+            new_max = False
+            stop_flag = False
 
-        for (dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, 
-                cl, crd, crq, fnames) in batch_loader_train:
-            tc = time.time()-tafter
-            loss, tr_acc, probs = m.train(dw, dt, qw, qt, c, a, m_dw, 
-                    m_qw, tt, tm, m_c, cl, crd, crq)
-            tafter = time.time()
+            for (dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, 
+                    cl, crd, crq, fnames) in batch_loader_train:
+                tc = time.time()-tafter
+                loss, tr_acc, probs = m.train(dw, dt, qw, qt, c, a, m_dw, 
+                        m_qw, tt, tm, m_c, cl, crd, crq)
+                tafter = time.time()
 
-            message = "Epoch %d TRAIN loss=%.4e acc=%.4f elapsed=%.1f (%.1f outside)" % (
-                    epoch, loss, tr_acc, time.time()-estart, tc)
-            print message
-            logger.write(message+'\n')
-
-            num_iter += 1
-            if num_iter % VALIDATION_FREQ == 0:
-                total_loss, total_acc, n, n_cand = 0., 0., 0., 0.
-
-                for (dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, 
-                        cl, crd, crq, fnames) in batch_loader_val:
-                    outs = m.validate(dw, dt, qw, qt, c, a, 
-                            m_dw, m_qw, tt, tm, m_c, cl, crd, crq)
-                    loss, acc, probs = outs[:3]
-
-                    bsize = dw.shape[0]
-                    total_loss += bsize*loss
-                    total_acc += bsize*acc
-                    n += bsize
-
-	        val_acc = total_acc/n
-                if val_acc > max_acc:
-                    max_acc = val_acc
-                    m.save_model('%s/best_model.p'%save_path)
-                    new_max = True
-                message = "Epoch %d VAL loss=%.4e acc=%.4f max_acc=%.4f" % (
-                    epoch, total_loss/n, val_acc, max_acc)
+                message = "Epoch %d TRAIN loss=%.4e acc=%.4f elapsed=%.1f (%.1f outside)" % (
+                        epoch, loss, tr_acc, time.time()-estart, tc)
                 print message
                 logger.write(message+'\n')
 
-        #m.save_model('%s/model_%d.p'%(save_path,epoch))
-        message = "After Epoch %d: Train acc=%.4f, Val acc=%.4f" % (epoch, tr_acc, max_acc)
-        print message
-        logger.write(message+'\n')
-        
-        # learning schedule
-        if epoch >=2 and epoch%ANNEAL==0:
-            m.anneal()
-        # stopping criterion
-        if (STOPPING and not new_max) or val_acc>0.99:
-            break
+                num_iter += 1
+                if num_iter % VALIDATION_FREQ == 0:
+                    total_loss, total_acc, n, n_cand = 0., 0., 0., 0.
+
+                    for (dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, 
+                            cl, crd, crq, fnames) in batch_loader_val:
+                        outs = m.validate(dw, dt, qw, qt, c, a, 
+                                m_dw, m_qw, tt, tm, m_c, cl, crd, crq)
+                        loss, acc, probs = outs[:3]
+
+                        bsize = dw.shape[0]
+                        total_loss += bsize*loss
+                        total_acc += bsize*acc
+                        n += bsize
+
+                    val_acc = total_acc/n
+                    if val_acc > max_acc:
+                        max_acc = val_acc
+                        m.save_model('%s/best_model.p'%save_path)
+                        new_max = True
+                    message = "Epoch %d VAL loss=%.4e acc=%.4f max_acc=%.4f" % (
+                        epoch, total_loss/n, val_acc, max_acc)
+                    print message
+                    logger.write(message+'\n')
+                    # stopping
+                    val_loss = total_loss/n
+                    if val_loss<min_loss: min_loss = val_loss
+                    if STOPPING and (val_loss-min_loss)/min_loss>0.1:
+                        stop_flag = True
+                        break
+
+            #m.save_model('%s/model_%d.p'%(save_path,epoch))
+            message = "After Epoch %d: Train acc=%.4f, Val acc=%.4f" % (epoch, tr_acc, max_acc)
+            print message
+            logger.write(message+'\n')
+            
+            # learning schedule
+            if epoch >=2 and epoch%ANNEAL==0:
+                m.anneal()
+            # stopping criterion
+            #if (STOPPING and not new_max) or val_acc>0.99:
+            #    break
+            if stop_flag: break
 
     # test
     mode = 'test'

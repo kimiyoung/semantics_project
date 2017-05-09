@@ -78,6 +78,6 @@ if params['mode']==0:
     train.main(save_path, params)
 # test
 elif params['mode']==1:
-    test.main(save_path, params)
+    train.main(save_path, params, mode='test')
 elif params['mode']==2:
-    test.main(save_path, params, mode='validation')
+    train.main(save_path, params, mode='validation')
