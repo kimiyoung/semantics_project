@@ -43,6 +43,10 @@ cmd = vars(args)
 params = get_params(cmd['dataset'])
 params.update(cmd)
 
+params['max_chains'] = params['relation_params'][params['rfile']]['max_chains']
+params['num_relations'] = params['relation_params'][params['rfile']]['num_relations']
+params['relation_dims'] = params['relation_params'][params['rfile']]['relation_dims']
+
 np.random.seed(params['seed'])
 random.seed(params['seed'])
 
@@ -70,6 +74,7 @@ save_path = ('crfreader_experiments_babi-v2/'+params['model']+'/'+params['datase
         '_chains%d'%params['max_chains']+
         '_rdims%d'%params['relation_dims']+
         '_rfile%s'%params['rfile'])
+print save_path
 if not os.path.exists(save_path): os.makedirs(save_path)
 #else: sys.exit()
 

@@ -101,9 +101,16 @@ lambada_params = {
         'use_feat'  :   0,
         #'num_coref' :   14,
         #'coref_dim' :   0,
-        'max_chains'    :   16,
-        'num_relations' :   10,
-        'relation_dims' :   25,
+        'relation_params'   :   {
+            'c' :   {'max_chains':16, 'num_relations':10, 'relation_dims':25},
+            'c.sep0' :   {'max_chains':11, 'num_relations':2, 'relation_dims':128},
+            'c.sep4' :   {'max_chains':11, 'num_relations':2, 'relation_dims':128},
+            'groups.sep4' :   {'max_chains':21, 'num_relations':11, 'relation_dims':25},
+            'groups.sep0' :   {'max_chains':25, 'num_relations':11, 'relation_dims':25},
+            }
+        #'max_chains'    :   21,
+        #'num_relations' :   11,
+        #'relation_dims' :   25,
         }
 
 babi_params = {
