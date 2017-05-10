@@ -22,7 +22,7 @@ def glorot(d1,d2):
     return np.sqrt(6./(d1+d2))
 
 class GRU(object):
-    def __init__(self, idim, odim, name, reverse=False):
+    def __init__(self, idim, odim, name, nonlinearity='tanh', reverse=False):
         def _gate_params(insize, outsize, name):
             gate = {}
             gate["W"] = tf.Variable(tf.random_normal((insize,outsize), 
@@ -44,6 +44,7 @@ class GRU(object):
                 self.hiddengate["U"]], axis=1) # Dr x 3Dout
         self.reverse = reverse
         self.out_dim = odim
+        self.nonlinearity = nonlinearity
 
     def _gru_cell(self, prev, inp, rgate, ugate, hgate):
         def _slice(a, n):
@@ -52,7 +53,12 @@ class GRU(object):
         hid_to_hid = tf.matmul(prev, self.Ustacked) # B x 3Dout
         r = tf.sigmoid(_slice(inp,0) + _slice(hid_to_hid,0) + rgate["b"])
         z = tf.sigmoid(_slice(inp,1) + _slice(hid_to_hid,1) + ugate["b"])
-        ht = tf.tanh(_slice(inp,2) + r*_slice(hid_to_hid,2) + hgate["b"])
+        if self.nonlinearity=='tanh':
+            ht = tf.tanh(_slice(inp,2) + r*_slice(hid_to_hid,2) + hgate["b"])
+        elif self.nonlinearity=='sigmoid':
+            ht = tf.sigmoid(_slice(inp,2) + r*_slice(hid_to_hid,2) + hgate["b"])
+        else:
+            raise ValueError("nonlinearity must be tanh or sigmoid")
         h = (1.-z)*prev + z*ht
         return h
 

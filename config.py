@@ -7,7 +7,7 @@ LEARNING_RATE = 0.01
 # Maximum number of steps in BPTT
 GRAD_STEPS = -1
 # Number of epochs for training
-NUM_EPOCHS = 10
+NUM_EPOCHS = 30
 # do validation every VALIDATION_FREQ iterations
 VALIDATION_FREQ = 25
 # maximum word length for character model
@@ -114,7 +114,7 @@ babi_params = {
         'train_emb' :   1,
         'use_feat'  :   0,
         #'coref_dim' :   0,
-        'max_chains'    :   14,
+        'max_chains'    :   5,
         'num_relations' :   2,
         'relation_dims' :   32,
         }

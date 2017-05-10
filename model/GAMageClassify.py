@@ -72,11 +72,16 @@ class Model:
             self.Wemb = tf.Variable(W_init, trainable=bool(self.train_emb))
             self.Femb = tf.Variable(tf.random_normal((2,2), mean=0.0, stddev=glorot(2,2), 
                 dtype=tf.float32))
+            self.Wout = tf.Variable(tf.random_normal((2*self.nhidden, num_cand), mean=0.0,
+                stddev=glorot(2*self.nhidden,num_cand), dtype=tf.float32))
+            self.bout = tf.Variable(tf.zeros((num_cand,), dtype=tf.float32))
 
             # network
             # embeddings
-            doc_emb = tf.nn.embedding_lookup(self.Wemb, self.doc) # B x N x De
-            qry_emb = tf.nn.embedding_lookup(self.Wemb, self.qry) # B x Q x De
+            doc_emb0 = tf.nn.embedding_lookup(self.Wemb, self.doc) # B x N x De
+            qry_emb0 = tf.nn.embedding_lookup(self.Wemb, self.qry) # B x Q x De
+            doc_emb = doc_emb0
+            qry_emb = qry_emb0
             fea_emb = tf.nn.embedding_lookup(self.Femb, self.feat) # B x N x 2
             self.aggs = []
             # layers
@@ -141,19 +146,30 @@ class Model:
                     bqagg = tf.zeros((1,1))
                 self.aggs += [fdagg,fqagg,bdagg,bqagg]
 
-            # attention sum
+            # attention weighted, query gated document vector
+            # query vector for attention
             if cloze:
                 cl = tf.one_hot(self.cloze, tf.shape(self.qry)[1]) # B x Q
                 q = tf.squeeze(tf.matmul(tf.expand_dims(cl,axis=1), qry_emb),axis=1) # B x 2Dh
             else:
                 mid = self.nhidden
                 q = tf.concat([qry_emb[:,-1,:mid], qry_emb[:,0,mid:]], axis=1) # B x 2Dh
-            p = tf.squeeze(tf.matmul(doc_emb, tf.expand_dims(q,axis=2)),axis=2) # B x N
-            probs = tf.nn.softmax(p) # B x N
-            probm = probs*self.cmask + EPS
-            probm = probm/tf.reduce_sum(probm, axis=1, keep_dims=True) # B x N
-            self.probc = tf.squeeze(
-                    tf.matmul(tf.expand_dims(probm,axis=1), tf.to_float(self.cand)),axis=1) # B x C
+            # query vector for attention
+            fgru = GRU(self.embed_dim, self.embed_dim/2, "qryfgru%d"%i)
+            bgru = GRU(self.embed_dim, self.embed_dim/2, "qrybgru%d"%i, reverse=True)
+            fout = fgru.compute(None, qry_emb0, self.qmask) # B x Q x De/2
+            bout = bgru.compute(None, qry_emb0, self.qmask) # B x Q x De/2
+            qo = tf.concat([fout[:,-1,:], bout[:,0,:]], axis=1) # B x De
+            # doc representation
+            p = tf.squeeze(tf.matmul(doc_emb0, tf.expand_dims(qo,axis=2)),axis=2) # B x N
+            alphas = tf.nn.softmax(p) # B x N
+            alphas = alphas*self.dmask + EPS
+            alphas = alphas/tf.reduce_sum(alphas, axis=1, keep_dims=True) # B x N
+            dgated = doc_emb*tf.expand_dims(q, axis=1) # B x N x 2Dh
+            doutput = tf.reduce_sum(dgated*tf.expand_dims(alphas, axis=2), axis=1) # B x 2Dh
+            # linear classifier
+            self.probc = tf.nn.softmax(
+                    tf.matmul(doutput,self.Wout) + tf.expand_dims(self.bout,axis=0)) # B x C
 
             # loss
             t1hot = tf.one_hot(self.ans, num_cand) # B x C
@@ -175,7 +191,7 @@ class Model:
             self.session.run(tf.global_variables_initializer())
             self.doc_rep = doc_emb
             self.qry_rep = qry_emb
-            self.doc_probs = probs
+            self.doc_probs = alphas
 
     def anneal(self):
         self.learning_rate /= 2

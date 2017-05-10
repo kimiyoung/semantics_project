@@ -6,7 +6,7 @@ import cPickle as pkl
 
 from config import *
 #from model import GAReaderSelect, GAReaderSelectTied, GAReaderpp, GAKnowledge, GAReaderCoref, GAReaderSelectCoref, GAReaderppAblation, GAReaderSelectAblation, GAReaderppCoref
-from model import BiGRU, GA, GAMage
+from model import BiGRU, GA, GAMage, GAMageClassify
 from utils import Helpers, DataPreprocessor, MiniBatchLoader
 
 def main(save_path, params, mode="train"):
@@ -128,7 +128,7 @@ def main(save_path, params, mode="train"):
     for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, crd, crq, fnames in batch_loader_test:
         outs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, crd, crq)
         loss, acc, probs, drep, qrep, doc_probs = outs[:6]
-        aggs = outs[6:6+2*params['nlayers']]
+        aggs = outs[6:6+4*params['nlayers']]
         all_masks.append([crd,crq])
         dreps.append(drep)
         qreps.append(qrep)

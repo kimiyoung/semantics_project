@@ -31,9 +31,9 @@ parser.add_argument('--train_cut', dest='train_cut', type=float, default=1.0,
 parser.add_argument('--gating_fn', dest='gating_fn', type=str, default='T.mul',
         help='Gating function (T.mul || Tsum || Tconcat)')
 parser.add_argument('--ga_layers', dest='ga_layers', type=str, default=None,
-        help='Layers to apply GA before (comma-separated list, default is every layer except first')
+        help='Layers to apply GA before (comma-separated list, default is every layer except first. Give -1 to disable GA at all layers')
 parser.add_argument('--mage_layers', dest='mage_layers', type=str, default=None,
-        help='Layers to use MAGE RNN instead of GRU (comma-separated list, default is all)')
+        help='Layers to use MAGE RNN instead of GRU (comma-separated list, default is all). Give -1 to disable MAGE at all layers')
 parser.add_argument('--concat', dest='concat', action='store_true')
 parser.add_argument('--no-concat', dest='concat', action='store_false')
 parser.add_argument('--reload', dest='reload_', action='store_true')
@@ -53,7 +53,7 @@ np.random.seed(params['seed'])
 random.seed(params['seed'])
 
 # number of coref
-#params['num_coref'] = int(open(params['dataset']+'/num_coref.txt').read().split('\t')[0])
+params['max_chains'] = int(open(params['dataset']+'/num_coref.txt').read().split('\t')[0])+1
 
 # save directory
 w2v_filename = params['word2vec'].split('/')[-1].split('.')[0] if params['word2vec'] else 'None'
