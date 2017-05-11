@@ -55,7 +55,7 @@ random.seed(params['seed'])
 
 # save directory
 w2v_filename = params['word2vec'].split('/')[-1].split('.')[0] if params['word2vec'] else 'None'
-save_path = ('crfreader_experiments_babi-v2/'+params['model']+'/'+params['dataset'].split('/')[0]+
+save_path = ('ensemble/'+params['model']+'/'+params['dataset'].split('/')[0]+
         '/m'+
         '_lr%.4f'%LEARNING_RATE+
         '_bsize%d'%BATCH_SIZE+

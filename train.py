@@ -59,6 +59,7 @@ def main(save_path, params, mode='train'):
     # train
     if mode=='train':
         tafter = 0.
+        saves = []
         for epoch in xrange(NUM_EPOCHS):
             estart = time.time()
             new_max = False
@@ -94,7 +95,9 @@ def main(save_path, params, mode='train'):
                     val_acc = total_acc/n
                     if val_acc > max_acc:
                         max_acc = val_acc
-                        m.save_model('%s/best_model.p'%save_path)
+                        save_id = num_iter if epoch>0 else 0
+                        m.save_model('%s/best_model.p'%save_path, save_id)
+                        saves.append(save_id)
                         new_max = True
                     message = "Epoch %d VAL loss=%.4e acc=%.4f max_acc=%.4f" % (
                         epoch, total_loss/n, val_acc, max_acc)
@@ -119,40 +122,57 @@ def main(save_path, params, mode='train'):
             #if (STOPPING and not new_max) or val_acc>0.99:
             #    break
             if stop_flag: break
+        # record all saved models
+        pkl.dump(saves, open('%s/checkpoints.p'%save_path,'w'))
 
     # test
     mode = 'test'
-    m.load_model('%s/best_model.p'%save_path)
-
     print("testing ...")
-    pr = np.zeros((len(batch_loader_test.questions),
+    pr = np.zeros((ENSEMBLE,len(batch_loader_test.questions),
         batch_loader_test.max_num_cand)).astype('float32')
-    d_pr = np.zeros((len(batch_loader_test.questions),
-        batch_loader_test.max_doc_len)).astype('float32')
-    fids, attns = [], []
-    dreps, qreps = [], []
-    all_aggs = []
-    all_masks = []
-    total_loss, total_acc, n = 0., 0., 0
-    for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, crd, crq, fnames in batch_loader_test:
-        outs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, crd, crq)
-        loss, acc, probs, drep, qrep, doc_probs = outs[:6]
-        aggs = outs[6:6+4*params['nlayers']]
-        dreps.append(drep)
-        qreps.append(qrep)
-        all_masks.append([crd[0],crq[0]])
-        all_aggs.append(aggs)
+    answer = np.zeros((len(batch_loader_test.questions),)).astype('float32')
+    saves = pkl.load(open('%s/checkpoints.p'%save_path))
+    accs = []
+    losss = []
+    for ii,step in enumerate(saves[-ENSEMBLE:]):
+        m.load_model('%s/best_model.p'%save_path, step)
 
-        bsize = dw.shape[0]
-        total_loss += bsize*loss
-        total_acc += bsize*acc
+        d_pr = np.zeros((len(batch_loader_test.questions),
+            batch_loader_test.max_doc_len)).astype('float32')
+        fids, attns = [], []
+        dreps, qreps = [], []
+        all_aggs = []
+        all_masks = []
+        total_loss, total_acc, n = 0., 0., 0
+        for dw, dt, qw, qt, a, m_dw, m_qw, tt, tm, c, m_c, cl, crd, crq, fnames in batch_loader_test:
+            outs = m.validate(dw, dt, qw, qt, c, a, m_dw, m_qw, tt, tm, m_c, cl, crd, crq)
+            loss, acc, probs, drep, qrep, doc_probs = outs[:6]
+            aggs = outs[6:6+4*params['nlayers']]
+            dreps.append(drep)
+            qreps.append(qrep)
+            all_masks.append([crd[0],crq[0]])
+            all_aggs.append(aggs)
 
-        pr[n:n+bsize,:] = probs
-        d_pr[n:n+bsize,:doc_probs.shape[1]] = doc_probs
-        fids += fnames
-        n += bsize
+            bsize = dw.shape[0]
+            total_loss += bsize*loss
+            total_acc += bsize*acc
 
-    message = '%s Loss %.4e acc=%.4f' % (mode.upper(), total_loss/n, total_acc/n)
+            pr[ii,n:n+bsize,:] = probs
+            answer[n:n+bsize] = a
+            d_pr[n:n+bsize,:doc_probs.shape[1]] = doc_probs
+            fids += fnames
+            n += bsize
+        accs.append(total_acc/n)
+        losss.append(total_loss/n)
+
+    # ensemble
+    pr_e = np.mean(pr, axis=0)
+    pred_e = np.argmax(pr_e, axis=1)
+    acc_e = float((pred_e==answer).sum())/n
+    message = '%s Loss %s Acc %s Ensemble %.4f' % (mode.upper(), 
+            ','.join(str(ll) for ll in losss), 
+            ','.join(str(ass) for ass in accs),
+            acc_e)
     print message
     logger.write(message+'\n')
 

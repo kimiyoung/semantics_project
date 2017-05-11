@@ -1,3 +1,4 @@
+import os
 import tensorflow as tf
 import numpy as np
 from tools import sub_sample
@@ -112,6 +113,7 @@ class Model:
                     doc_emb = doc_emb*gating # B x N x 2Dh
                     doc_emb = tf.nn.dropout(doc_emb, self.keep_prob) 
                 self.aggs += [fdagg,fqagg,bdagg,bqagg]
+            self.fdoclast_resetU = fdoc.resetgate["U"]
             # attention sum
             if cloze:
                 cl = tf.one_hot(self.cloze, tf.shape(self.qry)[1]) # B x Q
@@ -147,6 +149,9 @@ class Model:
             self.doc_rep = doc_emb
             self.qry_rep = qry_emb
             self.doc_probs = probs
+
+    def inspect(self):
+        return self.session.run([self.fdoclast_resetU])
 
     def anneal(self):
         self.learning_rate /= 2
@@ -239,11 +244,12 @@ class Model:
         #return loss, acc, probs, drep, qrep, dprobs, aggs
         return outs
     
-    def save_model(self, save_path):
-        base_path = save_path.rsplit('/',1)[0]+'/'
+    def save_model(self, save_path, step):
+        base_path = save_path.rsplit('/',1)[0]+'/'+str(step)+'/'
+        if not os.path.exists(base_path): os.makedirs(base_path)
         self.saver.save(self.session, base_path+'model')
 
-    def load_model(self, load_path):
-        base_path = load_path.rsplit('/',1)[0]+'/'
+    def load_model(self, load_path, step):
+        base_path = load_path.rsplit('/',1)[0]+'/'+str(step)+'/'
         new_saver = tf.train.import_meta_graph(base_path+'model.meta')
         new_saver.restore(self.session, tf.train.latest_checkpoint(base_path))

@@ -16,6 +16,8 @@ MAX_WORD_LEN = 10
 ANNEAL = 1
 # early stopping
 STOPPING = True
+# model averaging
+ENSEMBLE = 3
 
 # dataset params
 def get_params(dataset):
@@ -107,6 +109,8 @@ lambada_params = {
             'c.sep4' :   {'max_chains':11, 'num_relations':2, 'relation_dims':128},
             'groups.sep4' :   {'max_chains':21, 'num_relations':11, 'relation_dims':25},
             'groups.sep0' :   {'max_chains':25, 'num_relations':11, 'relation_dims':25},
+            'deps.sep0' :   {'max_chains':24, 'num_relations':10, 'relation_dims':25},
+            'random.sep0' :   {'max_chains':11, 'num_relations':2, 'relation_dims':128},
             }
         #'max_chains'    :   21,
         #'num_relations' :   11,
